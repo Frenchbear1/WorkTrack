@@ -357,7 +357,7 @@ function SummaryBand({
       <div>
         <p className="text-sm font-medium text-white/60">Unpaid</p>
         <p className="mt-1 text-4xl font-semibold tracking-normal">
-          {formatMoney(total, settings.currency)}
+          {formatMoney(total, settings.currency, { whole: true })}
         </p>
       </div>
       <div className="grid size-16 place-items-center rounded-3xl bg-white/10 text-white">
@@ -570,7 +570,7 @@ function LogCard({
               </p>
             </div>
             <p className="shrink-0 text-base font-semibold text-stone-950">
-              {formatMoney(amount, settings.currency)}
+              {formatMoney(amount, settings.currency, { whole: true })}
             </p>
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -1687,7 +1687,7 @@ function LogDetailModal({
           <p className="text-sm text-stone-500">{formatClockRange(log.startAt, log.endAt)}</p>
           <h3 className="mt-2 text-2xl font-semibold text-stone-950">{log.title}</h3>
           <p className="mt-3 text-3xl font-semibold text-stone-950">
-            {formatMoney(amount, settings.currency)}
+            {formatMoney(amount, settings.currency, { whole: true })}
           </p>
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

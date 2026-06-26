@@ -28,7 +28,7 @@ function makeLog(patch: Partial<LogEntry> = {}): LogEntry {
     flatAmount: null,
     roundingMinutes: 15,
     adjustmentAmount: 0,
-    amountDue: 75,
+    amountDue: 70,
     paidAt: null,
     notes: '',
     createdAt: startAt,
@@ -44,7 +44,7 @@ describe('billing calculations', () => {
     expect(roundBillableMinutes(7, 0)).toBe(7)
   })
 
-  it('calculates hourly logs from rounded time, rate, and adjustment', () => {
+  it('calculates hourly logs from exact elapsed time rounded to dollars', () => {
     expect(
       calculateHourlyAmount(
         '2026-06-26T12:00:00.000Z',
@@ -53,7 +53,17 @@ describe('billing calculations', () => {
         15,
         5,
       ),
-    ).toBe(80)
+    ).toBe(75)
+  })
+
+  it('does not bump short hourly logs up to the rounding increment', () => {
+    const log = makeLog({
+      endAt: '2026-06-26T12:06:00.000Z',
+      rate: 25,
+      roundingMinutes: 15,
+    })
+
+    expect(calculateLogAmount(log)).toBe(3)
   })
 
   it('estimates active hourly logs from exact elapsed time rounded to dollars', () => {
@@ -85,7 +95,7 @@ describe('billing calculations', () => {
     const active = makeLog({ id: 'active', status: 'active', endAt: null })
     const paid = makeLog({ id: 'paid', paidAt: '2026-06-26T14:00:00.000Z' })
 
-    expect(calculateUnpaidTotal([unpaid, active, paid])).toBe(75)
+    expect(calculateUnpaidTotal([unpaid, active, paid])).toBe(70)
   })
 
   it('finds the single active log', () => {

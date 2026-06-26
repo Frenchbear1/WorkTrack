@@ -42,19 +42,16 @@ export function calculateHourlyAmount(
   startAt: string,
   endAt: string,
   rate: number,
-  roundingMinutes: number,
+  _roundingMinutes: number,
   adjustmentAmount = 0,
 ) {
-  const minutes = roundBillableMinutes(
-    getDurationMinutes(startAt, endAt),
-    roundingMinutes,
-  )
-  return roundCurrency((minutes / 60) * rate + adjustmentAmount)
+  const minutes = getDurationMinutes(startAt, endAt)
+  return roundDollar((minutes / 60) * rate + adjustmentAmount)
 }
 
 export function calculateLogAmount(log: LogEntry, now = new Date()) {
   if (log.mode === 'flat') {
-    return roundCurrency((log.flatAmount ?? 0) + log.adjustmentAmount)
+    return roundDollar((log.flatAmount ?? 0) + log.adjustmentAmount)
   }
 
   const endAt = log.endAt ?? now.toISOString()
@@ -78,11 +75,9 @@ export function calculateLiveLogEstimate(log: LogEntry, now = new Date()) {
 }
 
 export function calculateUnpaidTotal(logs: LogEntry[]) {
-  return roundCurrency(
-    logs
-      .filter((log) => log.status === 'stopped' && !log.paidAt)
-      .reduce((sum, log) => sum + calculateLogAmount(log), 0),
-  )
+  return logs
+    .filter((log) => log.status === 'stopped' && !log.paidAt)
+    .reduce((sum, log) => sum + calculateLogAmount(log), 0)
 }
 
 export function getActiveLog(logs: LogEntry[]) {
