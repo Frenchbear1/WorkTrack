@@ -64,8 +64,9 @@ export type UserSettings = {
   accentColor: string
   locationMode: LocationMode
   hidePaidByDefault: boolean
-  reducedMotion: boolean
+  compactLogs: boolean
   homeSectionOrder: HomeSectionId[]
+  homeSectionVisibility: Record<HomeSectionId, boolean>
 }
 
 export type SessionUser = {

@@ -1,4 +1,4 @@
-import { AnimatePresence, MotionConfig, motion, useReducedMotion } from 'framer-motion'
+import { AnimatePresence, MotionConfig, motion } from 'framer-motion'
 import {
   ArrowDown,
   ArrowUp,
@@ -42,11 +42,14 @@ import {
   calculateLiveLogEstimate,
   calculateUnpaidTotal,
   DEFAULT_HOME_SECTION_ORDER,
+  DEFAULT_HOME_SECTION_VISIBILITY,
   getActiveLog,
   getDurationMinutes,
   getPresetRate,
   getVisibleLogs,
+  getVisibleHomeSectionOrder,
   normalizeHomeSectionOrder,
+  normalizeHomeSectionVisibility,
 } from './lib/calculations'
 import {
   formatClockRange,
@@ -705,6 +708,7 @@ function LogCard({
   selected,
   selectionMode,
   isPayTarget,
+  compact,
   onSelect,
   onOpen,
   onTogglePaid,
@@ -714,6 +718,7 @@ function LogCard({
   selected: boolean
   selectionMode: boolean
   isPayTarget: boolean
+  compact: boolean
   onSelect: () => void
   onOpen: () => void
   onTogglePaid: () => void
@@ -722,6 +727,66 @@ function LogCard({
   const isPaid = Boolean(log.paidAt)
   const statusLabel = log.status === 'active' ? 'Running' : isPaid ? 'Paid' : 'Unpaid'
   const PaidActionIcon = isPaid ? Undo2 : Check
+  const hasLocation =
+    Boolean(log.startLocation.label) ||
+    log.startLocation.permissionState === 'granted' ||
+    Boolean(log.startLocation.latitude && log.startLocation.longitude)
+  const locationTitle = log.startLocation.label || 'Location captured'
+
+  if (compact) {
+    return (
+      <motion.article
+        layout
+        animate={{
+          scale: selected || isPayTarget ? 0.99 : 1,
+        }}
+        className={clsx(
+          'rounded-2xl bg-white px-3 py-2 shadow-sm ring-1 transition-colors',
+          selected || isPayTarget
+            ? 'ring-[color:color-mix(in_srgb,var(--accent)_24%,transparent)]'
+            : 'ring-transparent',
+        )}
+      >
+        <div className="flex min-w-0 items-center gap-2">
+          {selectionMode ? (
+            <button
+              type="button"
+              onClick={onSelect}
+              className="grid size-9 shrink-0 place-items-center text-[var(--accent)]"
+              title={selected ? 'Deselect log' : 'Select log'}
+            >
+              {selected ? <SquareCheckBig size={20} /> : <Square size={20} />}
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={onOpen}
+            className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 text-left"
+          >
+            <h3 className="truncate text-sm font-semibold text-stone-950 sm:text-base">
+              {log.title}
+            </h3>
+            <p className="shrink-0 text-sm font-semibold text-stone-950 sm:text-base">
+              {formatMoney(amount, settings.currency, { whole: true })}
+            </p>
+          </button>
+          <button
+            type="button"
+            onClick={onTogglePaid}
+            className={clsx(
+              'grid size-9 shrink-0 place-items-center rounded-full transition',
+              isPaid
+                ? 'bg-orange-50 text-orange-700'
+                : 'bg-emerald-50 text-emerald-700',
+            )}
+            title={isPaid ? 'Mark unpaid' : 'Mark paid'}
+          >
+            <PaidActionIcon size={17} />
+          </button>
+        </div>
+      </motion.article>
+    )
+  }
 
   return (
     <motion.article
@@ -777,10 +842,13 @@ function LogCard({
             <span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-semibold text-stone-500">
               {log.mode}
             </span>
-            {log.startLocation.label ? (
-              <span className="flex max-w-full items-center gap-1 truncate rounded-full bg-stone-100 px-3 py-1 text-xs font-semibold text-stone-500">
+            {hasLocation ? (
+              <span
+                className="grid size-7 shrink-0 place-items-center rounded-full bg-stone-100 text-stone-500"
+                title={locationTitle}
+                aria-label={locationTitle}
+              >
                 <MapPin size={13} />
-                {log.startLocation.label}
               </span>
             ) : null}
           </div>
@@ -835,7 +903,7 @@ function HomeView({
   const recentLogs = getVisibleLogs(logs, false)
     .filter((log) => log.status === 'stopped')
     .slice(0, 4)
-  const sectionOrder = normalizeHomeSectionOrder(settings.homeSectionOrder)
+  const sectionOrder = getVisibleHomeSectionOrder(settings)
   const sections: Record<HomeSectionId, ReactNode> = {
     summary: (
       <SummaryBand total={unpaidTotal} count={unpaidCount} settings={settings} />
@@ -890,6 +958,7 @@ function HomeView({
               selected={false}
               selectionMode={false}
               isPayTarget={false}
+              compact={settings.compactLogs}
               onSelect={() => undefined}
               onOpen={() => onOpenLog(log)}
               onTogglePaid={() => onOpenLog(log)}
@@ -957,7 +1026,7 @@ function LogsFilterPanel({
                 ) : null}
               </div>
             </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3">
               <label className={labelClass}>
                 Preset
                 <select
@@ -1179,6 +1248,7 @@ function LogsView({
                         selected={selectedLogIds.includes(log.id)}
                         selectionMode
                         isPayTarget={isMagnetic}
+                        compact={settings.compactLogs}
                         onSelect={() => onToggleSelection(log.id)}
                         onOpen={() => onOpenLog(log)}
                         onTogglePaid={() => onTogglePaid(log.id)}
@@ -1792,6 +1862,28 @@ function SettingsModal({
     onSubmit(draft)
   }
   const homeSectionOrder = normalizeHomeSectionOrder(draft.homeSectionOrder)
+  const homeSectionVisibility = normalizeHomeSectionVisibility(
+    draft.homeSectionVisibility,
+  )
+  const visibleHomeSectionCount = homeSectionOrder.filter(
+    (sectionId) => homeSectionVisibility[sectionId],
+  ).length
+
+  const toggleHomeSectionVisibility = (sectionId: HomeSectionId) => {
+    const isVisible = homeSectionVisibility[sectionId]
+
+    if (isVisible && visibleHomeSectionCount <= 1) {
+      return
+    }
+
+    setDraft({
+      ...draft,
+      homeSectionVisibility: {
+        ...homeSectionVisibility,
+        [sectionId]: !isVisible,
+      },
+    })
+  }
 
   return (
     <Modal
@@ -1843,6 +1935,7 @@ function SettingsModal({
                 setDraft({
                   ...draft,
                   homeSectionOrder: [...DEFAULT_HOME_SECTION_ORDER],
+                  homeSectionVisibility: { ...DEFAULT_HOME_SECTION_VISIBILITY },
                 })
               }
               className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-stone-600 shadow-sm"
@@ -1856,18 +1949,42 @@ function SettingsModal({
                 (section) => section.id === sectionId,
               )
               const Icon = option?.Icon ?? ReceiptText
+              const isVisible = homeSectionVisibility[sectionId]
 
               return (
                 <div
                   key={sectionId}
-                  className="flex items-center gap-3 rounded-2xl bg-white px-3 py-2 shadow-sm"
+                  className={clsx(
+                    'flex items-center gap-3 rounded-2xl bg-white px-3 py-2 shadow-sm transition',
+                    isVisible ? '' : 'opacity-60',
+                  )}
                 >
-                  <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-stone-100 text-stone-600">
+                  <button
+                    type="button"
+                    onClick={() => toggleHomeSectionVisibility(sectionId)}
+                    disabled={isVisible && visibleHomeSectionCount <= 1}
+                    className={clsx(
+                      'grid size-9 shrink-0 place-items-center rounded-xl transition disabled:opacity-50',
+                      isVisible
+                        ? 'bg-[var(--accent)] text-white'
+                        : 'bg-stone-100 text-stone-400',
+                    )}
+                    title={
+                      isVisible
+                        ? 'Hide section'
+                        : 'Show section'
+                    }
+                  >
                     <Icon size={17} />
-                  </div>
+                  </button>
                   <p className="min-w-0 flex-1 truncate text-sm font-semibold text-stone-800">
                     {labelForHomeSection(sectionId)}
                   </p>
+                  {!isVisible ? (
+                    <span className="rounded-full bg-stone-100 px-2.5 py-1 text-xs font-semibold text-stone-500">
+                      Hidden
+                    </span>
+                  ) : null}
                   <button
                     type="button"
                     onClick={() =>
@@ -1909,33 +2026,17 @@ function SettingsModal({
             })}
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <label className={labelClass}>
-            Default rate
-            <input
-              className={inputClass}
-              inputMode="decimal"
-              value={draft.defaultRate}
-              onChange={(event) =>
-                setDraft({ ...draft, defaultRate: numberFromInput(event.target.value) })
-              }
-            />
-          </label>
-          <label className={labelClass}>
-            Round min
-            <input
-              className={inputClass}
-              inputMode="numeric"
-              value={draft.roundingMinutes}
-              onChange={(event) =>
-                setDraft({
-                  ...draft,
-                  roundingMinutes: numberFromInput(event.target.value, 15),
-                })
-              }
-            />
-          </label>
-        </div>
+        <label className={labelClass}>
+          Default rate
+          <input
+            className={inputClass}
+            inputMode="decimal"
+            value={draft.defaultRate}
+            onChange={(event) =>
+              setDraft({ ...draft, defaultRate: numberFromInput(event.target.value) })
+            }
+          />
+        </label>
         <div className="space-y-2">
           <p className="text-sm font-medium text-stone-700">Accent</p>
           <div className="flex gap-2">
@@ -1978,12 +2079,12 @@ function SettingsModal({
           />
         </label>
         <label className="flex items-center justify-between rounded-2xl bg-stone-100 px-4 py-3 text-sm font-semibold text-stone-700">
-          Reduced motion
+          Compact logs
           <input
             type="checkbox"
-            checked={draft.reducedMotion}
+            checked={draft.compactLogs}
             onChange={(event) =>
-              setDraft({ ...draft, reducedMotion: event.target.checked })
+              setDraft({ ...draft, compactLogs: event.target.checked })
             }
             className="size-5 accent-[var(--accent)]"
           />
@@ -2208,8 +2309,7 @@ function App() {
     [logs, quickFlatLogId],
   )
   const now = useTicker(Boolean(activeLog))
-  const systemReducedMotion = useReducedMotion()
-  const reducedMotion = Boolean(settings.reducedMotion || systemReducedMotion)
+  const reducedMotion = false
 
   useEffect(() => {
     setShowPaid(!settings.hidePaidByDefault)
@@ -2494,11 +2594,6 @@ function App() {
       return
     }
 
-    if (reducedMotion) {
-      onComplete()
-      return
-    }
-
     setPayTargetIds(uniqueIds)
     window.setTimeout(() => {
       onComplete()
@@ -2576,7 +2671,7 @@ function App() {
   }
 
   return (
-    <MotionConfig reducedMotion={settings.reducedMotion ? 'always' : 'user'}>
+    <MotionConfig reducedMotion="never">
       <div
         className="min-h-svh bg-stone-200 text-stone-950"
         style={{ '--accent': settings.accentColor } as CSSProperties}

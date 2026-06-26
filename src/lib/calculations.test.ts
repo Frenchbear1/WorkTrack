@@ -5,8 +5,10 @@ import {
   calculateLogAmount,
   calculateUnpaidTotal,
   DEFAULT_SETTINGS,
+  getVisibleHomeSectionOrder,
   mergeSettings,
   normalizeHomeSectionOrder,
+  normalizeHomeSectionVisibility,
   getActiveLog,
   roundBillableMinutes,
 } from './calculations'
@@ -115,6 +117,8 @@ describe('billing calculations', () => {
       'presets',
       'recent',
     ])
+    expect(DEFAULT_SETTINGS.compactLogs).toBe(false)
+    expect(DEFAULT_SETTINGS.homeSectionVisibility.summary).toBe(true)
   })
 
   it('normalizes saved home layout order', () => {
@@ -128,6 +132,31 @@ describe('billing calculations', () => {
         homeSectionOrder: undefined,
       } as unknown as UserSettings).homeSectionOrder,
     ).toEqual(DEFAULT_SETTINGS.homeSectionOrder)
+  })
+
+  it('keeps saved home sections hidden while preserving a visible screen', () => {
+    const visibility = normalizeHomeSectionVisibility({
+      summary: false,
+      recent: false,
+    })
+
+    expect(visibility.summary).toBe(false)
+    expect(visibility.timer).toBe(true)
+    expect(
+      getVisibleHomeSectionOrder({
+        homeSectionOrder: ['recent', 'summary', 'timer', 'presets'],
+        homeSectionVisibility: visibility,
+      }),
+    ).toEqual(['timer', 'presets'])
+
+    expect(
+      normalizeHomeSectionVisibility({
+        summary: false,
+        timer: false,
+        presets: false,
+        recent: false,
+      }).timer,
+    ).toBe(true)
   })
 
   it('groups log weeks from Monday through Sunday', () => {

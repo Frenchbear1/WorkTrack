@@ -7,6 +7,13 @@ export const DEFAULT_HOME_SECTION_ORDER: HomeSectionId[] = [
   'recent',
 ]
 
+export const DEFAULT_HOME_SECTION_VISIBILITY: Record<HomeSectionId, boolean> = {
+  summary: true,
+  timer: true,
+  presets: true,
+  recent: true,
+}
+
 export const DEFAULT_SETTINGS: UserSettings = {
   currency: 'USD',
   defaultRate: 45,
@@ -15,8 +22,9 @@ export const DEFAULT_SETTINGS: UserSettings = {
   accentColor: '#247C6D',
   locationMode: 'ask',
   hidePaidByDefault: true,
-  reducedMotion: false,
+  compactLogs: false,
   homeSectionOrder: DEFAULT_HOME_SECTION_ORDER,
+  homeSectionVisibility: DEFAULT_HOME_SECTION_VISIBILITY,
 }
 
 export function normalizeHomeSectionOrder(
@@ -34,6 +42,34 @@ export function normalizeHomeSectionOrder(
       (section) => !uniqueKnownSections.includes(section),
     ),
   ]
+}
+
+export function normalizeHomeSectionVisibility(
+  visibility: Partial<Record<HomeSectionId, boolean>> | null | undefined,
+) {
+  const nextVisibility = { ...DEFAULT_HOME_SECTION_VISIBILITY }
+
+  DEFAULT_HOME_SECTION_ORDER.forEach((section) => {
+    if (typeof visibility?.[section] === 'boolean') {
+      nextVisibility[section] = Boolean(visibility[section])
+    }
+  })
+
+  if (!Object.values(nextVisibility).some(Boolean)) {
+    nextVisibility.timer = true
+  }
+
+  return nextVisibility
+}
+
+export function getVisibleHomeSectionOrder(
+  settings: Pick<UserSettings, 'homeSectionOrder' | 'homeSectionVisibility'>,
+): HomeSectionId[] {
+  const order = normalizeHomeSectionOrder(settings.homeSectionOrder)
+  const visibility = normalizeHomeSectionVisibility(settings.homeSectionVisibility)
+  const visibleOrder = order.filter((section) => visibility[section])
+
+  return visibleOrder.length > 0 ? visibleOrder : ['timer']
 }
 
 export function roundCurrency(value: number) {
@@ -123,12 +159,21 @@ export function getPresetRate(preset: JobPreset, settings: UserSettings) {
   return preset.defaultRate ?? settings.defaultRate
 }
 
-export function mergeSettings(settings: UserSettings | null) {
+export function mergeSettings(settings: Partial<UserSettings> | null) {
   const merged = { ...DEFAULT_SETTINGS, ...settings }
 
   return {
-    ...merged,
+    currency: merged.currency,
+    defaultRate: merged.defaultRate,
+    roundingMinutes: merged.roundingMinutes,
     theme: 'light' as const,
+    accentColor: merged.accentColor,
+    locationMode: merged.locationMode,
+    hidePaidByDefault: merged.hidePaidByDefault,
+    compactLogs: Boolean(merged.compactLogs),
     homeSectionOrder: normalizeHomeSectionOrder(merged.homeSectionOrder),
+    homeSectionVisibility: normalizeHomeSectionVisibility(
+      merged.homeSectionVisibility,
+    ),
   }
 }

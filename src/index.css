@@ -162,11 +162,3 @@ input[type="time"]::-webkit-date-and-time-value {
 ::selection {
   background: color-mix(in srgb, var(--accent) 22%, transparent);
 }
-
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    scroll-behavior: auto !important;
-  }
-}
