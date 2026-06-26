@@ -930,7 +930,7 @@ function BottomNav({
             onClick={() => onChange(id)}
             className={clsx(
               'flex min-w-0 flex-col items-center justify-center rounded-full text-xs font-semibold transition active:scale-95',
-              isCompact ? 'size-14 gap-0' : 'h-14 gap-1 px-5',
+              isCompact ? 'size-14 gap-0' : 'h-16 gap-1 px-5 pb-2 pt-2',
               view === id
                 ? 'bg-white/90 text-stone-950 shadow-sm'
                 : 'text-stone-600 hover:bg-white/35',
@@ -942,7 +942,7 @@ function BottomNav({
             <span
               aria-hidden={isCompact}
               className={clsx(
-                'block h-4 overflow-hidden whitespace-nowrap text-center transition-[height,opacity,transform] duration-200 ease-out',
+                'block h-5 overflow-hidden whitespace-nowrap text-center leading-5 transition-[height,opacity,transform] duration-200 ease-out',
                 isCompact
                   ? 'h-0 -translate-y-1 opacity-0'
                   : 'translate-y-0 opacity-100',
