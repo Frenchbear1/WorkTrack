@@ -122,6 +122,36 @@ function useTicker(enabled: boolean) {
   return now
 }
 
+function useCompactNav() {
+  const [isCompact, setIsCompact] = useState(false)
+
+  useEffect(() => {
+    let lastScrollY = window.scrollY
+
+    const handleScroll = () => {
+      const nextScrollY = window.scrollY
+      const delta = nextScrollY - lastScrollY
+
+      if (nextScrollY < 48) {
+        setIsCompact(false)
+      } else if (delta > 8) {
+        setIsCompact(true)
+      } else if (delta < -8) {
+        setIsCompact(false)
+      }
+
+      lastScrollY = nextScrollY
+    }
+
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    handleScroll()
+
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [])
+
+  return isCompact
+}
+
 function iconForPreset(icon: PresetIcon) {
   return presetIconOptions.find((option) => option.id === icon)?.Icon ?? BriefcaseBusiness
 }
@@ -273,16 +303,10 @@ function StatusPill({ syncState, syncMessage }: { syncState: string; syncMessage
 
 function AppHeader({
   view,
-  session,
-  syncState,
-  syncMessage,
   onManual,
   onSettings,
 }: {
   view: ViewName
-  session: SessionUser
-  syncState: string
-  syncMessage: string
   onManual: () => void
   onSettings: () => void
 }) {
@@ -292,14 +316,6 @@ function AppHeader({
     <header className="sticky top-0 z-20 border-b border-stone-200/80 bg-[#f7f9f4]/90 px-5 pb-4 pt-[calc(env(safe-area-inset-top)+14px)] backdrop-blur-xl">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <div className="mb-2 flex items-center gap-2">
-            <StatusPill syncState={syncState} syncMessage={syncMessage} />
-            {session.isPreview ? (
-              <span className="rounded-full bg-stone-200 px-3 py-1 text-xs font-semibold text-stone-600">
-                Preview
-              </span>
-            ) : null}
-          </div>
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-stone-400">
             WorkTrack
           </p>
@@ -836,28 +852,49 @@ function PresetsView({
 function BottomNav({
   view,
   onChange,
+  isCompact,
 }: {
   view: ViewName
   onChange: (view: ViewName) => void
+  isCompact: boolean
 }) {
   return (
-    <nav className="fixed bottom-0 left-1/2 z-30 w-full max-w-[430px] -translate-x-1/2 border-t border-stone-200/80 bg-white/90 px-5 pb-[calc(env(safe-area-inset-bottom)+10px)] pt-3 backdrop-blur-xl">
-      <div className="grid grid-cols-3 gap-2 rounded-[24px] bg-stone-100 p-1">
+    <nav className="pointer-events-none fixed bottom-[calc(env(safe-area-inset-bottom)+14px)] left-1/2 z-30 w-full max-w-[430px] -translate-x-1/2 px-5">
+      <motion.div
+        layout
+        className={clsx(
+          'pointer-events-auto mx-auto grid grid-cols-3 items-center gap-1 rounded-full border border-white/60 bg-white/45 p-1 shadow-2xl shadow-stone-950/15 ring-1 ring-stone-950/5 backdrop-blur-2xl transition-colors',
+          isCompact ? 'max-w-[206px]' : 'max-w-[330px]',
+        )}
+        transition={{ duration: 0.2, ease: 'easeOut' }}
+      >
         {navItems.map(({ id, label, Icon }) => (
           <button
             key={id}
             type="button"
             onClick={() => onChange(id)}
             className={clsx(
-              'flex flex-col items-center gap-1 rounded-[20px] px-3 py-2 text-xs font-semibold transition',
-              view === id ? 'bg-white text-stone-950 shadow-sm' : 'text-stone-500',
+              'flex min-w-0 items-center justify-center rounded-full text-xs font-semibold transition active:scale-95',
+              isCompact ? 'size-14' : 'h-14 flex-col gap-1 px-5',
+              view === id
+                ? 'bg-white/90 text-stone-950 shadow-sm'
+                : 'text-stone-600 hover:bg-white/35',
             )}
+            aria-label={label}
+            title={label}
           >
             <Icon size={20} />
-            {label}
+            <span
+              className={clsx(
+                'overflow-hidden whitespace-nowrap transition-all',
+                isCompact ? 'max-h-0 max-w-0 opacity-0' : 'max-h-5 max-w-16 opacity-100',
+              )}
+            >
+              {label}
+            </span>
           </button>
         ))}
-      </div>
+      </motion.div>
     </nav>
   )
 }
@@ -1318,6 +1355,8 @@ function SettingsModal({
   open,
   settings,
   session,
+  syncState,
+  syncMessage,
   onClose,
   onSubmit,
   onSignOut,
@@ -1325,6 +1364,8 @@ function SettingsModal({
   open: boolean
   settings: UserSettings
   session: SessionUser
+  syncState: string
+  syncMessage: string
   onClose: () => void
   onSubmit: (settings: UserSettings) => void
   onSignOut: () => void
@@ -1369,9 +1410,19 @@ function SettingsModal({
       }
     >
       <form id="settings-form" className="space-y-4" onSubmit={handleSubmit}>
-        <div className="rounded-2xl bg-stone-100 px-4 py-3">
-          <p className="text-sm font-semibold text-stone-950">{session.displayName}</p>
-          <p className="truncate text-sm text-stone-500">{session.email}</p>
+        <div className="space-y-3 rounded-2xl bg-stone-100 px-4 py-3">
+          <div>
+            <p className="text-sm font-semibold text-stone-950">{session.displayName}</p>
+            <p className="truncate text-sm text-stone-500">{session.email}</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <StatusPill syncState={syncState} syncMessage={syncMessage} />
+            {session.isPreview ? (
+              <span className="rounded-full bg-stone-200 px-3 py-1 text-xs font-semibold text-stone-600">
+                Preview
+              </span>
+            ) : null}
+          </div>
         </div>
         <label className={labelClass}>
           Default rate
@@ -1637,6 +1688,7 @@ function App() {
     [detailLogId, logs],
   )
   const now = useTicker(Boolean(activeLog))
+  const isNavCompact = useCompactNav()
   const systemReducedMotion = useReducedMotion()
   const reducedMotion = Boolean(settings.reducedMotion || systemReducedMotion)
 
@@ -1896,9 +1948,6 @@ function App() {
         <div className="mx-auto min-h-svh max-w-[430px] bg-[#f7f9f4] shadow-2xl">
           <AppHeader
             view={view}
-            session={session}
-            syncState={syncState}
-            syncMessage={syncMessage}
             onManual={() => setManualOpen(true)}
             onSettings={() => setSettingsOpen(true)}
           />
@@ -1954,7 +2003,7 @@ function App() {
               />
             ) : null}
           </main>
-          <BottomNav view={view} onChange={setView} />
+          <BottomNav view={view} onChange={setView} isCompact={isNavCompact} />
         </div>
         <StartLogModal
           open={startOpen}
@@ -1983,6 +2032,8 @@ function App() {
           open={settingsOpen}
           settings={settings}
           session={session}
+          syncState={syncState}
+          syncMessage={syncMessage}
           onClose={() => setSettingsOpen(false)}
           onSubmit={saveSettings}
           onSignOut={() => void signOut()}
