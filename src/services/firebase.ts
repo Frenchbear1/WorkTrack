@@ -37,6 +37,7 @@ type FirebaseServices = {
 }
 
 let services: FirebaseServices | null = null
+let authPersistencePromise: Promise<void> | null = null
 
 export function getFirebaseServices() {
   if (!isFirebaseConfigured) {
@@ -65,7 +66,8 @@ export async function prepareAuthPersistence() {
     return
   }
 
-  await setPersistence(firebase.auth, browserLocalPersistence)
+  authPersistencePromise ??= setPersistence(firebase.auth, browserLocalPersistence)
+  await authPersistencePromise
 }
 
 export async function signInWithGoogle() {
@@ -75,17 +77,28 @@ export async function signInWithGoogle() {
     throw new Error('Firebase is not configured yet.')
   }
 
-  await prepareAuthPersistence()
-
   const provider = new GoogleAuthProvider()
   provider.setCustomParameters({ prompt: 'select_account' })
 
-  if (shouldUseRedirectSignIn()) {
-    await signInWithRedirect(firebase.auth, provider)
+  try {
+    await signInWithPopup(firebase.auth, provider)
     return
+  } catch (error) {
+    if (!shouldFallBackToRedirect(error)) {
+      throw error
+    }
   }
 
-  await signInWithPopup(firebase.auth, provider)
+  try {
+    await signInWithRedirect(firebase.auth, provider)
+    return
+  } catch (error) {
+    throw new Error(
+      error instanceof Error
+        ? error.message
+        : 'Google sign-in could not open on this device.',
+    )
+  }
 }
 
 export async function signOutOfFirebase() {
@@ -96,14 +109,18 @@ export async function signOutOfFirebase() {
   }
 }
 
-function shouldUseRedirectSignIn() {
-  if (typeof window === 'undefined') {
-    return true
-  }
+function shouldFallBackToRedirect(error: unknown) {
+  const code =
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    typeof error.code === 'string'
+      ? error.code
+      : ''
 
-  const userAgent = window.navigator.userAgent.toLowerCase()
-  const isIOS = /iphone|ipad|ipod/.test(userAgent)
-  const isStandalonePwa = window.matchMedia('(display-mode: standalone)').matches
-
-  return isIOS || isStandalonePwa
+  return [
+    'auth/cancelled-popup-request',
+    'auth/operation-not-supported-in-this-environment',
+    'auth/popup-blocked',
+  ].includes(code)
 }

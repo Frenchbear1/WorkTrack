@@ -10,6 +10,7 @@ import {
 } from '../services/firebase'
 
 const previewSessionKey = 'worktrack.previewSession'
+const googleSignInAttemptKey = 'worktrack.googleSignInAttempt'
 
 const previewUser: SessionUser = {
   uid: 'preview-user',
@@ -26,6 +27,30 @@ function mapFirebaseUser(user: User): SessionUser {
     email: user.email ?? '',
     photoURL: user.photoURL,
     isPreview: false,
+  }
+}
+
+function rememberGoogleSignInAttempt() {
+  try {
+    window.sessionStorage.setItem(googleSignInAttemptKey, 'true')
+  } catch {
+    // Session storage can be unavailable in some private browsing modes.
+  }
+}
+
+function forgetGoogleSignInAttempt() {
+  try {
+    window.sessionStorage.removeItem(googleSignInAttemptKey)
+  } catch {
+    // Session storage can be unavailable in some private browsing modes.
+  }
+}
+
+function hadGoogleSignInAttempt() {
+  try {
+    return window.sessionStorage.getItem(googleSignInAttemptKey) === 'true'
+  } catch {
+    return false
   }
 }
 
@@ -72,38 +97,92 @@ export function useAuthSession() {
       }
     }, 15000)
 
-    void prepareAuthPersistence().catch((authError: unknown) => {
-      setError(
-        authError instanceof Error
-          ? authError.message
-          : 'Could not prepare sign-in.',
-      )
-    })
+    let authStateChecked = false
+    let redirectChecked = false
 
-    void getRedirectResult(firebase.auth).catch((redirectError: unknown) => {
-      setError(
-        redirectError instanceof Error
-          ? redirectError.message
-          : 'Google sign-in was not completed.',
-      )
+    const applyFirebaseUser = (user: User | null) => {
+      if (isCancelled) {
+        return
+      }
+
+      if (user) {
+        forgetGoogleSignInAttempt()
+        setError('')
+        setSession(mapFirebaseUser(user))
+        return
+      }
+
+      setSession(null)
+    }
+
+    const finishWhenChecked = () => {
+      if (!authStateChecked || !redirectChecked || isCancelled) {
+        return
+      }
+
+      if (!firebase.auth.currentUser && hadGoogleSignInAttempt()) {
+        forgetGoogleSignInAttempt()
+        setError(
+          'Google returned without saving the sign-in session. Try once more, and make sure the page opens in Safari or Chrome instead of an in-app browser.',
+        )
+      }
+
       markReady()
-    })
+    }
 
-    unsubscribe = onAuthStateChanged(
-      firebase.auth,
-      (user) => {
+    const startAuth = async () => {
+      try {
+        await prepareAuthPersistence()
+      } catch (authError: unknown) {
         if (!isCancelled) {
-          setSession(user ? mapFirebaseUser(user) : null)
+          setError(
+            authError instanceof Error
+              ? authError.message
+              : 'Could not prepare sign-in.',
+          )
         }
-        markReady()
-      },
-      (authError) => {
-        if (!isCancelled) {
-          setError(authError.message)
-        }
-        markReady()
-      },
-    )
+      }
+
+      if (isCancelled) {
+        return
+      }
+
+      unsubscribe = onAuthStateChanged(
+        firebase.auth,
+        (user) => {
+          applyFirebaseUser(user)
+          authStateChecked = true
+          finishWhenChecked()
+        },
+        (authError) => {
+          if (!isCancelled) {
+            setError(authError.message)
+          }
+          authStateChecked = true
+          finishWhenChecked()
+        },
+      )
+
+      void getRedirectResult(firebase.auth)
+        .then((redirectResult) => {
+          applyFirebaseUser(redirectResult?.user ?? firebase.auth.currentUser)
+        })
+        .catch((redirectError: unknown) => {
+          if (!isCancelled) {
+            setError(
+              redirectError instanceof Error
+                ? redirectError.message
+                : 'Google sign-in was not completed.',
+            )
+          }
+        })
+        .finally(() => {
+          redirectChecked = true
+          finishWhenChecked()
+        })
+    }
+
+    void startAuth()
 
     return () => {
       isCancelled = true
@@ -124,8 +203,10 @@ export function useAuthSession() {
     }
 
     try {
+      rememberGoogleSignInAttempt()
       await signInWithGoogle()
     } catch (signInError) {
+      forgetGoogleSignInAttempt()
       setError(
         signInError instanceof Error
           ? signInError.message
