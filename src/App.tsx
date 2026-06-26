@@ -874,8 +874,8 @@ function BottomNav({
             type="button"
             onClick={() => onChange(id)}
             className={clsx(
-              'flex min-w-0 items-center justify-center rounded-full text-xs font-semibold transition active:scale-95',
-              isCompact ? 'size-14' : 'h-14 flex-col gap-1 px-5',
+              'flex min-w-0 flex-col items-center justify-center rounded-full text-xs font-semibold transition active:scale-95',
+              isCompact ? 'size-14 gap-0' : 'h-14 gap-1 px-5',
               view === id
                 ? 'bg-white/90 text-stone-950 shadow-sm'
                 : 'text-stone-600 hover:bg-white/35',
@@ -885,9 +885,12 @@ function BottomNav({
           >
             <Icon size={20} />
             <span
+              aria-hidden={isCompact}
               className={clsx(
-                'overflow-hidden whitespace-nowrap transition-all',
-                isCompact ? 'max-h-0 max-w-0 opacity-0' : 'max-h-5 max-w-16 opacity-100',
+                'block h-4 overflow-hidden whitespace-nowrap text-center transition-[height,opacity,transform] duration-200 ease-out',
+                isCompact
+                  ? 'h-0 -translate-y-1 opacity-0'
+                  : 'translate-y-0 opacity-100',
               )}
             >
               {label}
