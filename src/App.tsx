@@ -131,36 +131,6 @@ function useTicker(enabled: boolean) {
   return now
 }
 
-function useCompactNav() {
-  const [isCompact, setIsCompact] = useState(false)
-
-  useEffect(() => {
-    let lastScrollY = window.scrollY
-
-    const handleScroll = () => {
-      const nextScrollY = window.scrollY
-      const delta = nextScrollY - lastScrollY
-
-      if (nextScrollY < 48) {
-        setIsCompact(false)
-      } else if (delta > 8) {
-        setIsCompact(true)
-      } else if (delta < -8) {
-        setIsCompact(false)
-      }
-
-      lastScrollY = nextScrollY
-    }
-
-    window.addEventListener('scroll', handleScroll, { passive: true })
-    handleScroll()
-
-    return () => window.removeEventListener('scroll', handleScroll)
-  }, [])
-
-  return isCompact
-}
-
 function iconForPreset(icon: PresetIcon) {
   return presetIconOptions.find((option) => option.id === icon)?.Icon ?? BriefcaseBusiness
 }
@@ -458,6 +428,51 @@ function TimerCard({
   )
 }
 
+function QuickFlatReceipt({
+  log,
+  settings,
+  onOpen,
+}: {
+  log: LogEntry | null
+  settings: UserSettings
+  onOpen: () => void
+}) {
+  if (!log) {
+    return null
+  }
+
+  const amount = calculateLogAmount(log)
+
+  return (
+    <section className="rounded-[26px] border border-emerald-100 bg-white p-4 shadow-sm">
+      <div className="flex items-center gap-3">
+        <div className="grid size-12 shrink-0 place-items-center rounded-2xl bg-emerald-50 text-emerald-700">
+          <CircleDollarSign size={23} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-stone-400">
+            Flat receipt added
+          </p>
+          <h3 className="mt-1 truncate text-base font-semibold text-stone-950">
+            {log.title}
+          </h3>
+        </div>
+        <p className="shrink-0 text-xl font-semibold text-stone-950">
+          {formatMoney(amount, settings.currency, { whole: true })}
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={onOpen}
+        className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-stone-100 px-4 py-3 text-sm font-semibold text-stone-700"
+      >
+        <ReceiptText size={16} />
+        Open receipt
+      </button>
+    </section>
+  )
+}
+
 function PresetRail({
   presets,
   settings,
@@ -618,6 +633,7 @@ function HomeView({
   presets,
   settings,
   activeLog,
+  quickFlatLog,
   now,
   onStart,
   onStop,
@@ -631,6 +647,7 @@ function HomeView({
   presets: JobPreset[]
   settings: UserSettings
   activeLog: LogEntry | null
+  quickFlatLog: LogEntry | null
   now: Date
   onStart: () => void
   onStop: () => void
@@ -655,6 +672,11 @@ function HomeView({
         settings={settings}
         onStart={onStart}
         onStop={onStop}
+      />
+      <QuickFlatReceipt
+        log={quickFlatLog}
+        settings={settings}
+        onOpen={() => quickFlatLog && onOpenLog(quickFlatLog)}
       />
       <PresetRail
         presets={presets}
@@ -907,30 +929,20 @@ function PresetsView({
 function BottomNav({
   view,
   onChange,
-  isCompact,
 }: {
   view: ViewName
   onChange: (view: ViewName) => void
-  isCompact: boolean
 }) {
   return (
     <nav className="pointer-events-none fixed bottom-[calc(env(safe-area-inset-bottom)+14px)] left-1/2 z-30 w-full max-w-[430px] -translate-x-1/2 px-5">
-      <motion.div
-        layout
-        className={clsx(
-          'pointer-events-auto mx-auto grid grid-cols-3 items-center gap-1 rounded-full border border-white/60 bg-white/45 p-1 shadow-2xl shadow-stone-950/15 ring-1 ring-stone-950/5 backdrop-blur-2xl transition-colors',
-          isCompact ? 'max-w-[206px]' : 'max-w-[330px]',
-        )}
-        transition={{ duration: 0.2, ease: 'easeOut' }}
-      >
+      <div className="pointer-events-auto mx-auto grid max-w-[390px] grid-cols-3 items-center gap-1 rounded-full border border-white/60 bg-white/55 p-1.5 shadow-2xl shadow-stone-950/15 ring-1 ring-stone-950/5 backdrop-blur-2xl">
         {navItems.map(({ id, label, Icon }) => (
           <button
             key={id}
             type="button"
             onClick={() => onChange(id)}
             className={clsx(
-              'flex min-w-0 flex-col items-center justify-center rounded-full text-xs font-semibold transition active:scale-95',
-              isCompact ? 'size-14 gap-0' : 'h-16 gap-1 px-5 pb-2 pt-2',
+              'flex h-[72px] min-w-0 flex-col items-center justify-center gap-1.5 rounded-full px-4 py-3 text-sm font-semibold',
               view === id
                 ? 'bg-white/90 text-stone-950 shadow-sm'
                 : 'text-stone-600 hover:bg-white/35',
@@ -938,21 +950,13 @@ function BottomNav({
             aria-label={label}
             title={label}
           >
-            <Icon size={20} />
-            <span
-              aria-hidden={isCompact}
-              className={clsx(
-                'block h-5 overflow-hidden whitespace-nowrap text-center leading-5 transition-[height,opacity,transform] duration-200 ease-out',
-                isCompact
-                  ? 'h-0 -translate-y-1 opacity-0'
-                  : 'translate-y-0 opacity-100',
-              )}
-            >
+            <Icon className="shrink-0" size={20} />
+            <span className="block min-h-6 whitespace-nowrap text-center leading-6">
               {label}
             </span>
           </button>
         ))}
-      </motion.div>
+      </div>
     </nav>
   )
 }
@@ -1762,6 +1766,7 @@ function App() {
   const [presetOpen, setPresetOpen] = useState(false)
   const [editingPreset, setEditingPreset] = useState<JobPreset | null>(null)
   const [detailLogId, setDetailLogId] = useState<string | null>(null)
+  const [quickFlatLogId, setQuickFlatLogId] = useState<string | null>(null)
   const logs = useWorktrackStore((state) => state.logs)
   const presets = useWorktrackStore((state) => state.presets)
   const settings = useWorktrackStore((state) => state.settings)
@@ -1789,8 +1794,11 @@ function App() {
     () => logs.find((log) => log.id === detailLogId) ?? null,
     [detailLogId, logs],
   )
+  const quickFlatLog = useMemo(
+    () => logs.find((log) => log.id === quickFlatLogId) ?? null,
+    [logs, quickFlatLogId],
+  )
   const now = useTicker(Boolean(activeLog))
-  const isNavCompact = useCompactNav()
   const systemReducedMotion = useReducedMotion()
   const reducedMotion = Boolean(settings.reducedMotion || systemReducedMotion)
 
@@ -1803,6 +1811,20 @@ function App() {
       setStartOpen(false)
     }
   }, [activeLog, startOpen])
+
+  useEffect(() => {
+    if (!quickFlatLogId) {
+      return
+    }
+
+    const timeout = window.setTimeout(() => {
+      setQuickFlatLogId((currentId) =>
+        currentId === quickFlatLogId ? null : currentId,
+      )
+    }, 5000)
+
+    return () => window.clearTimeout(timeout)
+  }, [quickFlatLogId])
 
   useEffect(() => {
     document.documentElement.style.setProperty('--accent', settings.accentColor)
@@ -1889,8 +1911,58 @@ function App() {
       )
   }
 
+  const saveFlatReceiptFromDraft = (
+    draft: StartDraft,
+    presetId: string | null = null,
+  ) => {
+    if (!session) {
+      return null
+    }
+
+    const startAt = new Date().toISOString()
+    const log = addManualLog({
+      uid: session.uid,
+      title: draft.title,
+      mode: 'flat',
+      presetId,
+      rate: null,
+      flatAmount: numberFromInput(draft.flatAmount),
+      startAt,
+      endAt: null,
+      adjustmentAmount: 0,
+      paid: false,
+      locationLabel: draft.locationLabel.trim(),
+      notes: draft.notes,
+      startLocation: skippedLocation(startAt, draft.locationLabel.trim()),
+    })
+
+    persistLog(log)
+    setQuickFlatLogId(log.id)
+    setView('home')
+
+    if (settings.locationMode === 'ask') {
+      void captureStartLocation(settings, draft.locationLabel.trim()).then((location) => {
+        const updated = useWorktrackStore
+          .getState()
+          .updateLog(log.id, { startLocation: location })
+
+        if (updated) {
+          persistLog(updated)
+        }
+      })
+    }
+
+    return log
+  }
+
   const startLogFromDraft = (draft: StartDraft, presetId: string | null = null) => {
     if (!session) {
+      return
+    }
+
+    if (draft.mode === 'flat') {
+      saveFlatReceiptFromDraft(draft, presetId)
+      setStartOpen(false)
       return
     }
 
@@ -2096,6 +2168,7 @@ function App() {
                 presets={presets}
                 settings={settings}
                 activeLog={activeLog}
+                quickFlatLog={quickFlatLog}
                 now={now}
                 onStart={() => setStartOpen(true)}
                 onStop={stopActive}
@@ -2142,7 +2215,7 @@ function App() {
               />
             ) : null}
           </main>
-          <BottomNav view={view} onChange={setView} isCompact={isNavCompact} />
+          <BottomNav view={view} onChange={setView} />
         </div>
         <StartLogModal
           open={startOpen}
