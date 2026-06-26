@@ -4,7 +4,6 @@ import {
   ArrowUp,
   BriefcaseBusiness,
   Check,
-  ChevronDown,
   CircleDollarSign,
   Clock3,
   Eye,
@@ -909,30 +908,31 @@ function LogsFilterPanel({
   return (
     <section className="rounded-[24px] bg-white p-4 shadow-sm">
       <div className="flex items-center justify-between gap-3">
-        <button
-          type="button"
-          onClick={() => setIsOpen((current) => !current)}
-          className="-m-2 flex min-w-0 flex-1 items-center justify-between gap-3 rounded-2xl p-2 text-left"
-          aria-expanded={isOpen}
-        >
-          <span className="flex min-w-0 items-center gap-2 text-sm font-semibold text-stone-950">
+        <div className="flex min-w-0 items-center gap-3">
+          <motion.button
+            type="button"
+            onClick={() => setIsOpen((current) => !current)}
+            whileTap={{ scale: 0.94 }}
+            className={clsx(
+              'grid size-10 shrink-0 place-items-center rounded-full transition',
+              isOpen
+                ? 'bg-[var(--accent)] text-white shadow-sm'
+                : 'bg-stone-100 text-stone-700',
+            )}
+            aria-expanded={isOpen}
+            aria-label={isOpen ? 'Hide filters' : 'Show filters'}
+            title={isOpen ? 'Hide filters' : 'Show filters'}
+          >
             <Filter size={17} />
-            Filters
-          </span>
-          <span className="flex shrink-0 items-center gap-2">
-            <span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-semibold text-stone-500">
-              {visibleCount} shown
-            </span>
-            <motion.span
-              animate={{ rotate: isOpen ? 180 : 0 }}
-              transition={{ duration: 0.2, ease: 'easeOut' }}
-              className="grid size-8 place-items-center rounded-full bg-stone-100 text-stone-600"
-            >
-              <ChevronDown size={16} />
-            </motion.span>
-          </span>
-        </button>
+          </motion.button>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-stone-950">Filters</p>
+          </div>
+        </div>
         <div className="flex items-center gap-2">
+          <span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-semibold text-stone-500">
+            {visibleCount} shown
+          </span>
           {hasFilters ? (
             <button
               type="button"
