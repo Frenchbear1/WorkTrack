@@ -35,6 +35,7 @@ html[data-theme="dark"] body {
 }
 
 :root[data-theme="dark"] .bg-white,
+:root[data-theme="dark"] .bg-white\/70,
 :root[data-theme="dark"] .bg-white\/80,
 :root[data-theme="dark"] .bg-white\/90 {
   background-color: #191f18 !important;

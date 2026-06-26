@@ -1,4 +1,4 @@
-import { format } from 'date-fns'
+import { endOfWeek, format, startOfWeek } from 'date-fns'
 
 export function formatMoney(
   amount: number,
@@ -39,6 +39,22 @@ export function formatClockRange(startAt: string, endAt: string | null) {
   }
 
   return `${startLabel} - ${format(end, 'h:mm a')}`
+}
+
+export function getWeekKey(value: string) {
+  return format(startOfWeek(new Date(value)), 'yyyy-MM-dd')
+}
+
+export function formatWeekRange(value: string) {
+  const date = new Date(value)
+  const start = startOfWeek(date)
+  const end = endOfWeek(date)
+
+  if (start.getFullYear() === end.getFullYear()) {
+    return `${format(start, 'MMM d')} - ${format(end, 'MMM d, yyyy')}`
+  }
+
+  return `${format(start, 'MMM d, yyyy')} - ${format(end, 'MMM d, yyyy')}`
 }
 
 export function toDateTimeLocalInput(date: Date) {

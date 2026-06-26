@@ -45,7 +45,15 @@ import {
   getPresetRate,
   getVisibleLogs,
 } from './lib/calculations'
-import { formatClockRange, formatDuration, formatMoney, fromDateTimeLocalInput, toDateTimeLocalInput } from './lib/format'
+import {
+  formatClockRange,
+  formatDuration,
+  formatMoney,
+  formatWeekRange,
+  fromDateTimeLocalInput,
+  getWeekKey,
+  toDateTimeLocalInput,
+} from './lib/format'
 import { captureStartLocation, skippedLocation } from './lib/location'
 import { createWorkspaceRepository } from './services/repository'
 import { useWorktrackStore } from './store/worktrackStore'
@@ -699,6 +707,7 @@ function LogsView({
   onToggleSelection,
   onTogglePaid,
   onMarkSelectedPaid,
+  onMarkAllPaid,
   onClearSelection,
   reducedMotion,
 }: {
@@ -711,15 +720,38 @@ function LogsView({
   onToggleSelection: (id: string) => void
   onTogglePaid: (id: string) => void
   onMarkSelectedPaid: () => void
+  onMarkAllPaid: () => void
   onClearSelection: () => void
   reducedMotion: boolean
 }) {
   const visibleLogs = getVisibleLogs(logs, showPaid)
   const hasSelection = selectedLogIds.length > 0
+  const unpaidCount = logs.filter(
+    (log) => log.status === 'stopped' && !log.paidAt,
+  ).length
+  const groupedLogs = visibleLogs.reduce<Array<{ key: string; label: string; logs: LogEntry[] }>>(
+    (groups, log) => {
+      const key = getWeekKey(log.startAt)
+      const group = groups.find((entry) => entry.key === key)
+
+      if (group) {
+        group.logs.push(log)
+        return groups
+      }
+
+      groups.push({
+        key,
+        label: formatWeekRange(log.startAt),
+        logs: [log],
+      })
+      return groups
+    },
+    [],
+  )
 
   return (
     <PageFrame reducedMotion={reducedMotion}>
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <Segmented
           value={showPaid ? 'all' : 'unpaid'}
           onChange={(value) => onShowPaid(value === 'all')}
@@ -728,15 +760,26 @@ function LogsView({
             { value: 'all', label: 'All', Icon: Eye },
           ]}
         />
-        {hasSelection ? (
-          <button
-            type="button"
-            onClick={onClearSelection}
-            className="rounded-full bg-white px-4 py-3 text-sm font-semibold text-stone-600 shadow-sm"
-          >
-            Clear
-          </button>
-        ) : null}
+        <div className="flex items-center gap-2">
+          {unpaidCount > 0 ? (
+            <button
+              type="button"
+              onClick={onMarkAllPaid}
+              className="rounded-full bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700 shadow-sm"
+            >
+              Mark all paid
+            </button>
+          ) : null}
+          {hasSelection ? (
+            <button
+              type="button"
+              onClick={onClearSelection}
+              className="rounded-full bg-white px-4 py-3 text-sm font-semibold text-stone-600 shadow-sm"
+            >
+              Clear
+            </button>
+          ) : null}
+        </div>
       </div>
       {hasSelection ? (
         <button
@@ -754,17 +797,28 @@ function LogsView({
             No logs here
           </div>
         ) : (
-          visibleLogs.map((log) => (
-            <LogCard
-              key={log.id}
-              log={log}
-              settings={settings}
-              selected={selectedLogIds.includes(log.id)}
-              selectionMode
-              onSelect={() => onToggleSelection(log.id)}
-              onOpen={() => onOpenLog(log)}
-              onTogglePaid={() => onTogglePaid(log.id)}
-            />
+          groupedLogs.map((group) => (
+            <section key={group.key} className="space-y-3">
+              <div className="flex items-center gap-3 pt-1">
+                <span className="h-px flex-1 bg-stone-200" />
+                <p className="rounded-full bg-white/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-stone-500 shadow-sm">
+                  {group.label}
+                </p>
+                <span className="h-px flex-1 bg-stone-200" />
+              </div>
+              {group.logs.map((log) => (
+                <LogCard
+                  key={log.id}
+                  log={log}
+                  settings={settings}
+                  selected={selectedLogIds.includes(log.id)}
+                  selectionMode
+                  onSelect={() => onToggleSelection(log.id)}
+                  onOpen={() => onOpenLog(log)}
+                  onTogglePaid={() => onTogglePaid(log.id)}
+                />
+              ))}
+            </section>
           ))
         )}
       </div>
@@ -1552,10 +1606,16 @@ function LogDetailModal({
 }) {
   const [locationLabel, setLocationLabel] = useState('')
   const [notes, setNotes] = useState('')
+  const [startAtInput, setStartAtInput] = useState('')
+  const [endAtInput, setEndAtInput] = useState('')
 
   useEffect(() => {
     setLocationLabel(log?.startLocation.label ?? '')
     setNotes(log?.notes ?? '')
+    setStartAtInput(log ? toDateTimeLocalInput(new Date(log.startAt)) : '')
+    setEndAtInput(
+      log?.endAt ? toDateTimeLocalInput(new Date(log.endAt)) : '',
+    )
   }, [log])
 
   if (!log) {
@@ -1563,6 +1623,30 @@ function LogDetailModal({
   }
 
   const amount = calculateLogAmount(log)
+  const saveDetail = () => {
+    const startAt = startAtInput
+      ? fromDateTimeLocalInput(startAtInput)
+      : log.startAt
+    const requestedEndAt =
+      log.status === 'active'
+        ? null
+        : fromDateTimeLocalInput(endAtInput || startAtInput || log.startAt)
+    const endAt =
+      requestedEndAt && new Date(requestedEndAt).getTime() < new Date(startAt).getTime()
+        ? startAt
+        : requestedEndAt
+
+    onSave(log, {
+      startAt,
+      endAt,
+      notes,
+      startLocation: {
+        ...log.startLocation,
+        label: locationLabel,
+        capturedAt: startAt,
+      },
+    })
+  }
 
   return (
     <Modal
@@ -1589,15 +1673,7 @@ function LogDetailModal({
           </button>
           <button
             type="button"
-            onClick={() =>
-              onSave(log, {
-                notes,
-                startLocation: {
-                  ...log.startLocation,
-                  label: locationLabel,
-                },
-              })
-            }
+            onClick={saveDetail}
             className="flex items-center justify-center gap-2 rounded-2xl bg-stone-950 px-5 py-4 text-base font-semibold text-white shadow-lg"
           >
             <Save size={18} />
@@ -1613,6 +1689,28 @@ function LogDetailModal({
           <p className="mt-3 text-3xl font-semibold text-stone-950">
             {formatMoney(amount, settings.currency)}
           </p>
+        </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <label className={labelClass}>
+            Start
+            <input
+              className={inputClass}
+              type="datetime-local"
+              value={startAtInput}
+              onChange={(event) => setStartAtInput(event.target.value)}
+            />
+          </label>
+          {log.status === 'stopped' ? (
+            <label className={labelClass}>
+              Stop
+              <input
+                className={inputClass}
+                type="datetime-local"
+                value={endAtInput}
+                onChange={(event) => setEndAtInput(event.target.value)}
+              />
+            </label>
+          ) : null}
         </div>
         <label className={labelClass}>
           Place label
@@ -1927,6 +2025,19 @@ function App() {
     updatedLogs.forEach(persistLog)
   }
 
+  const markAllPaid = () => {
+    const unpaidLogIds = logs
+      .filter((log) => log.status === 'stopped' && !log.paidAt)
+      .map((log) => log.id)
+
+    if (unpaidLogIds.length === 0) {
+      return
+    }
+
+    const updatedLogs = markLogsPaid(unpaidLogIds)
+    updatedLogs.forEach(persistLog)
+  }
+
   const removeLog = (id: string) => {
     if (!session) {
       return
@@ -1972,13 +2083,13 @@ function App() {
         className="min-h-svh bg-stone-200 text-stone-950"
         style={{ '--accent': settings.accentColor } as CSSProperties}
       >
-        <div className="mx-auto min-h-svh max-w-[430px] bg-[#f7f9f4] shadow-2xl">
+        <div className="mx-auto min-h-svh max-w-[430px] bg-[#f7f9f4] shadow-2xl sm:max-w-[760px] lg:max-w-[1120px]">
           <AppHeader
             view={view}
             onManual={() => setManualOpen(true)}
             onSettings={() => setSettingsOpen(true)}
           />
-          <main className="px-5 pb-28 pt-5">
+          <main className="px-5 pb-28 pt-5 lg:px-8 lg:pb-32">
             {view === 'home' ? (
               <HomeView
                 logs={logs}
@@ -2009,6 +2120,7 @@ function App() {
                 onToggleSelection={toggleLogSelection}
                 onTogglePaid={togglePaid}
                 onMarkSelectedPaid={markSelectedPaid}
+                onMarkAllPaid={markAllPaid}
                 onClearSelection={clearSelection}
                 reducedMotion={reducedMotion}
               />
