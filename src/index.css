@@ -122,6 +122,7 @@ body {
 
 button,
 input,
+select,
 textarea {
   font: inherit;
 }
@@ -131,7 +132,8 @@ button {
 }
 
 textarea,
-input {
+input,
+select {
   min-width: 0;
   font-size: 16px;
 }

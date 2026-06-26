@@ -8,6 +8,7 @@ import {
   Clock3,
   Eye,
   EyeOff,
+  Filter,
   Hammer,
   Home as HomeIcon,
   Loader2,
@@ -97,8 +98,20 @@ type PresetDraft = {
   notes: string
 }
 
+type LogModeFilter = JobMode | 'all'
+
+type LogFilters = {
+  presetId: string
+  mode: LogModeFilter
+  fromDate: string
+  toDate: string
+}
+
 const inputClass =
   'w-full rounded-2xl border border-stone-200 bg-white px-4 py-3 text-base text-stone-950 outline-none transition placeholder:text-stone-400 focus:border-[var(--accent)] focus:ring-4 focus:ring-[color:color-mix(in_srgb,var(--accent)_18%,transparent)]'
+
+const selectClass =
+  'w-full rounded-2xl border border-stone-200 bg-white px-4 py-3 text-base text-stone-950 outline-none transition focus:border-[var(--accent)] focus:ring-4 focus:ring-[color:color-mix(in_srgb,var(--accent)_18%,transparent)]'
 
 const labelClass = 'block space-y-2 text-sm font-medium text-stone-700'
 
@@ -132,9 +145,87 @@ const presetIconOptions: Array<{ id: PresetIcon; label: string; Icon: LucideIcon
   { id: 'wrench', label: 'Wrench', Icon: Wrench },
 ]
 
+const manualPresetFilterId = '__manual__'
+
+const defaultLogFilters: LogFilters = {
+  presetId: 'all',
+  mode: 'all',
+  fromDate: '',
+  toDate: '',
+}
+
 function numberFromInput(value: string, fallback = 0) {
   const parsed = Number(value)
   return Number.isFinite(parsed) ? parsed : fallback
+}
+
+function dateInputBoundary(value: string, endOfDay = false) {
+  if (!value) {
+    return null
+  }
+
+  const date = new Date(`${value}T${endOfDay ? '23:59:59.999' : '00:00:00.000'}`)
+  const time = date.getTime()
+  return Number.isFinite(time) ? time : null
+}
+
+function hasActiveLogFilters(filters: LogFilters) {
+  return (
+    filters.presetId !== defaultLogFilters.presetId ||
+    filters.mode !== defaultLogFilters.mode ||
+    Boolean(filters.fromDate) ||
+    Boolean(filters.toDate)
+  )
+}
+
+function applyLogFilters(logs: LogEntry[], filters: LogFilters) {
+  const fromTime = dateInputBoundary(filters.fromDate)
+  const toTime = dateInputBoundary(filters.toDate, true)
+
+  return logs.filter((log) => {
+    if (filters.mode !== 'all' && log.mode !== filters.mode) {
+      return false
+    }
+
+    if (
+      filters.presetId === manualPresetFilterId &&
+      log.presetId !== null
+    ) {
+      return false
+    }
+
+    if (
+      filters.presetId !== 'all' &&
+      filters.presetId !== manualPresetFilterId &&
+      log.presetId !== filters.presetId
+    ) {
+      return false
+    }
+
+    const startedAt = new Date(log.startAt).getTime()
+
+    if (!Number.isFinite(startedAt)) {
+      return false
+    }
+
+    if (fromTime !== null && startedAt < fromTime) {
+      return false
+    }
+
+    if (toTime !== null && startedAt > toTime) {
+      return false
+    }
+
+    return true
+  })
+}
+
+function getFilteredVisibleLogs(
+  logs: LogEntry[],
+  showPaid: boolean,
+  filters: LogFilters,
+) {
+  return applyLogFilters(getVisibleLogs(logs, showPaid), filters)
 }
 
 function useTicker(enabled: boolean) {
@@ -798,12 +889,112 @@ function HomeView({
   )
 }
 
+function LogsFilterPanel({
+  presets,
+  filters,
+  visibleCount,
+  onChange,
+  onReset,
+}: {
+  presets: JobPreset[]
+  filters: LogFilters
+  visibleCount: number
+  onChange: (filters: LogFilters) => void
+  onReset: () => void
+}) {
+  const hasFilters = hasActiveLogFilters(filters)
+
+  return (
+    <section className="space-y-3 rounded-[24px] bg-white p-4 shadow-sm">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 text-sm font-semibold text-stone-950">
+          <Filter size={17} />
+          Filters
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-semibold text-stone-500">
+            {visibleCount} shown
+          </span>
+          {hasFilters ? (
+            <button
+              type="button"
+              onClick={onReset}
+              className="rounded-full bg-stone-100 px-3 py-1 text-xs font-semibold text-stone-600"
+            >
+              Reset
+            </button>
+          ) : null}
+        </div>
+      </div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <label className={labelClass}>
+          Preset
+          <select
+            className={selectClass}
+            value={filters.presetId}
+            onChange={(event) =>
+              onChange({ ...filters, presetId: event.target.value })
+            }
+          >
+            <option value="all">All jobs</option>
+            <option value={manualPresetFilterId}>Manual</option>
+            {presets.map((preset) => (
+              <option key={preset.id} value={preset.id}>
+                {preset.title}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className={labelClass}>
+          Type
+          <select
+            className={selectClass}
+            value={filters.mode}
+            onChange={(event) =>
+              onChange({ ...filters, mode: event.target.value as LogModeFilter })
+            }
+          >
+            <option value="all">All types</option>
+            <option value="hourly">Hourly</option>
+            <option value="flat">Flat</option>
+          </select>
+        </label>
+        <label className={labelClass}>
+          From
+          <input
+            className={inputClass}
+            type="date"
+            value={filters.fromDate}
+            onChange={(event) =>
+              onChange({ ...filters, fromDate: event.target.value })
+            }
+          />
+        </label>
+        <label className={labelClass}>
+          To
+          <input
+            className={inputClass}
+            type="date"
+            value={filters.toDate}
+            onChange={(event) =>
+              onChange({ ...filters, toDate: event.target.value })
+            }
+          />
+        </label>
+      </div>
+    </section>
+  )
+}
+
 function LogsView({
   logs,
+  presets,
   settings,
   showPaid,
+  filters,
   selectedLogIds,
   payTargetIds,
+  onFiltersChange,
   onShowPaid,
   onOpenLog,
   onToggleSelection,
@@ -814,10 +1005,13 @@ function LogsView({
   reducedMotion,
 }: {
   logs: LogEntry[]
+  presets: JobPreset[]
   settings: UserSettings
   showPaid: boolean
+  filters: LogFilters
   selectedLogIds: string[]
   payTargetIds: string[]
+  onFiltersChange: (filters: LogFilters) => void
   onShowPaid: (showPaid: boolean) => void
   onOpenLog: (log: LogEntry) => void
   onToggleSelection: (id: string) => void
@@ -827,7 +1021,7 @@ function LogsView({
   onClearSelection: () => void
   reducedMotion: boolean
 }) {
-  const visibleLogs = getVisibleLogs(logs, showPaid)
+  const visibleLogs = getFilteredVisibleLogs(logs, showPaid, filters)
   const hasSelection = selectedLogIds.length > 0
   const magneticLogIds =
     payTargetIds.length > 0
@@ -835,7 +1029,7 @@ function LogsView({
       : selectedLogIds.length > 1
         ? selectedLogIds
         : []
-  const unpaidCount = logs.filter(
+  const visibleUnpaidCount = visibleLogs.filter(
     (log) => log.status === 'stopped' && !log.paidAt,
   ).length
   const groupedLogs = visibleLogs.reduce<Array<{ key: string; label: string; logs: LogEntry[] }>>(
@@ -870,13 +1064,13 @@ function LogsView({
           ]}
         />
         <div className="flex items-center gap-2">
-          {unpaidCount > 0 ? (
+          {visibleUnpaidCount > 0 ? (
             <button
               type="button"
               onClick={onMarkAllPaid}
               className="rounded-full bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700 shadow-sm"
             >
-              Mark all paid
+              Mark shown paid
             </button>
           ) : null}
           {hasSelection ? (
@@ -900,6 +1094,13 @@ function LogsView({
           Mark selected paid
         </button>
       ) : null}
+      <LogsFilterPanel
+        presets={presets}
+        filters={filters}
+        visibleCount={visibleLogs.length}
+        onChange={onFiltersChange}
+        onReset={() => onFiltersChange(defaultLogFilters)}
+      />
       <div className="space-y-3">
         {visibleLogs.length === 0 ? (
           <div className="rounded-[24px] border border-dashed border-stone-300 bg-white px-4 py-8 text-center text-sm font-semibold text-stone-500">
@@ -1936,6 +2137,7 @@ function App() {
   const [detailLogId, setDetailLogId] = useState<string | null>(null)
   const [quickFlatLogId, setQuickFlatLogId] = useState<string | null>(null)
   const [payTargetIds, setPayTargetIds] = useState<string[]>([])
+  const [logFilters, setLogFilters] = useState<LogFilters>(defaultLogFilters)
   const logs = useWorktrackStore((state) => state.logs)
   const presets = useWorktrackStore((state) => state.presets)
   const settings = useWorktrackStore((state) => state.settings)
@@ -2242,6 +2444,11 @@ function App() {
     }
   }
 
+  const updateLogFilters = (filters: LogFilters) => {
+    setLogFilters(filters)
+    clearSelection()
+  }
+
   const animatePayTargets = (ids: string[], onComplete: () => void) => {
     const uniqueIds = Array.from(new Set(ids))
 
@@ -2262,14 +2469,22 @@ function App() {
   }
 
   const markSelectedPaid = () => {
-    animatePayTargets(selectedLogIds, () => {
-      const updatedLogs = markLogsPaid(selectedLogIds)
+    const selectedPayableIds = selectedLogIds.filter((id) =>
+      logs.some((log) => log.id === id && log.status === 'stopped' && !log.paidAt),
+    )
+
+    if (selectedPayableIds.length === 0) {
+      return
+    }
+
+    animatePayTargets(selectedPayableIds, () => {
+      const updatedLogs = markLogsPaid(selectedPayableIds)
       updatedLogs.forEach(persistLog)
     })
   }
 
   const markAllPaid = () => {
-    const unpaidLogIds = logs
+    const unpaidLogIds = getFilteredVisibleLogs(logs, showPaid, logFilters)
       .filter((log) => log.status === 'stopped' && !log.paidAt)
       .map((log) => log.id)
 
@@ -2334,7 +2549,7 @@ function App() {
             onManual={() => setManualOpen(true)}
             onSettings={() => setSettingsOpen(true)}
           />
-          <main className="px-5 pb-28 pt-5 lg:px-8 lg:pb-32">
+          <main className="px-5 pb-[calc(env(safe-area-inset-bottom)+9rem)] pt-5 sm:pb-32 lg:px-8 lg:pb-32">
             {view === 'home' ? (
               <HomeView
                 logs={logs}
@@ -2358,10 +2573,13 @@ function App() {
             {view === 'logs' ? (
               <LogsView
                 logs={logs}
+                presets={presets}
                 settings={settings}
                 showPaid={showPaid}
+                filters={logFilters}
                 selectedLogIds={selectedLogIds}
                 payTargetIds={payTargetIds}
+                onFiltersChange={updateLogFilters}
                 onShowPaid={setShowPaid}
                 onOpenLog={(log) => setDetailLogId(log.id)}
                 onToggleSelection={toggleLogSelection}
