@@ -1,13 +1,19 @@
 import { format } from 'date-fns'
 
-export function formatMoney(amount: number, currency: string) {
+export function formatMoney(
+  amount: number,
+  currency: string,
+  options: { whole?: boolean } = {},
+) {
   try {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency,
+      maximumFractionDigits: options.whole ? 0 : 2,
+      minimumFractionDigits: options.whole ? 0 : 2,
     }).format(amount)
   } catch {
-    return `$${amount.toFixed(2)}`
+    return options.whole ? `$${Math.round(amount)}` : `$${amount.toFixed(2)}`
   }
 }
 

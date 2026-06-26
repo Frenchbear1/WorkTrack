@@ -16,6 +16,85 @@
   color-scheme: dark;
 }
 
+html[data-theme="dark"],
+html[data-theme="dark"] body {
+  background: #0d100e;
+}
+
+:root[data-theme="dark"] .bg-\[\#f7f9f4\] {
+  background-color: #10140f !important;
+}
+
+:root[data-theme="dark"] .bg-stone-200 {
+  background-color: #0d100e !important;
+}
+
+:root[data-theme="dark"] .bg-stone-100,
+:root[data-theme="dark"] .bg-stone-200\/80 {
+  background-color: #232821 !important;
+}
+
+:root[data-theme="dark"] .bg-white,
+:root[data-theme="dark"] .bg-white\/80,
+:root[data-theme="dark"] .bg-white\/90 {
+  background-color: #191f18 !important;
+}
+
+:root[data-theme="dark"] .bg-white\/45 {
+  background-color: rgba(25, 31, 24, 0.58) !important;
+}
+
+:root[data-theme="dark"] .bg-white\/35 {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+:root[data-theme="dark"] .bg-white\/10,
+:root[data-theme="dark"] .bg-white\/15 {
+  background-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+:root[data-theme="dark"] .bg-stone-950 {
+  background-color: #050705 !important;
+}
+
+:root[data-theme="dark"] .text-stone-950 {
+  color: #f6f7f1 !important;
+}
+
+:root[data-theme="dark"] .text-stone-700,
+:root[data-theme="dark"] .text-stone-600 {
+  color: #d4d8cc !important;
+}
+
+:root[data-theme="dark"] .text-stone-500,
+:root[data-theme="dark"] .text-stone-400 {
+  color: #9ea798 !important;
+}
+
+:root[data-theme="dark"] .border-stone-200,
+:root[data-theme="dark"] .border-stone-200\/70,
+:root[data-theme="dark"] .border-stone-200\/80 {
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+:root[data-theme="dark"] .border-white,
+:root[data-theme="dark"] .border-white\/60,
+:root[data-theme="dark"] .border-white\/70,
+:root[data-theme="dark"] .border-white\/80 {
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+:root[data-theme="dark"] input,
+:root[data-theme="dark"] textarea {
+  background-color: #11160f !important;
+  color: #f6f7f1 !important;
+}
+
+:root[data-theme="dark"] input::placeholder,
+:root[data-theme="dark"] textarea::placeholder {
+  color: #7f897a !important;
+}
+
 * {
   box-sizing: border-box;
 }

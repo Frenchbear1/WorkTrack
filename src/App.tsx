@@ -38,6 +38,7 @@ import { Modal } from './components/Modal'
 import { useAuthSession } from './hooks/useAuthSession'
 import {
   calculateLogAmount,
+  calculateLiveLogEstimate,
   calculateUnpaidTotal,
   getActiveLog,
   getDurationMinutes,
@@ -399,7 +400,7 @@ function TimerCard({
   }
 
   const minutes = getDurationMinutes(activeLog.startAt, now.toISOString())
-  const amount = calculateLogAmount(activeLog, now)
+  const amount = calculateLiveLogEstimate(activeLog, now)
 
   return (
     <section className="overflow-hidden rounded-[30px] border border-white bg-white shadow-sm">
@@ -424,7 +425,7 @@ function TimerCard({
               Estimate
             </p>
             <p className="mt-2 text-xl font-semibold text-stone-950">
-              {formatMoney(amount, settings.currency)}
+              {formatMoney(amount, settings.currency, { whole: true })}
             </p>
           </div>
           <div className="rounded-2xl bg-stone-100 p-4">
@@ -1706,9 +1707,32 @@ function App() {
   }, [activeLog, startOpen])
 
   useEffect(() => {
-    document.documentElement.dataset.theme = settings.theme
     document.documentElement.style.setProperty('--accent', settings.accentColor)
-  }, [settings.accentColor, settings.theme])
+  }, [settings.accentColor])
+
+  useEffect(() => {
+    const systemTheme = window.matchMedia('(prefers-color-scheme: dark)')
+    const applyTheme = () => {
+      const effectiveTheme =
+        settings.theme === 'system'
+          ? systemTheme.matches
+            ? 'dark'
+            : 'light'
+          : settings.theme
+
+      document.documentElement.dataset.theme = effectiveTheme
+      document.documentElement.style.colorScheme = effectiveTheme
+    }
+
+    applyTheme()
+
+    if (settings.theme !== 'system') {
+      return
+    }
+
+    systemTheme.addEventListener('change', applyTheme)
+    return () => systemTheme.removeEventListener('change', applyTheme)
+  }, [settings.theme])
 
   useEffect(() => {
     if (!session) {

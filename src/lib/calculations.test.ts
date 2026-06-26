@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   calculateHourlyAmount,
+  calculateLiveLogEstimate,
   calculateLogAmount,
   calculateUnpaidTotal,
   DEFAULT_SETTINGS,
@@ -53,6 +54,19 @@ describe('billing calculations', () => {
         5,
       ),
     ).toBe(80)
+  })
+
+  it('estimates active hourly logs from exact elapsed time rounded to dollars', () => {
+    const log = makeLog({
+      status: 'active',
+      endAt: null,
+      rate: 25,
+      roundingMinutes: 15,
+    })
+
+    expect(
+      calculateLiveLogEstimate(log, new Date('2026-06-26T12:06:00.000Z')),
+    ).toBe(3)
   })
 
   it('calculates flat logs from flat amount and adjustment', () => {

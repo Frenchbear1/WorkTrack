@@ -15,6 +15,10 @@ export function roundCurrency(value: number) {
   return Math.round((value + Number.EPSILON) * 100) / 100
 }
 
+export function roundDollar(value: number) {
+  return Math.round(value)
+}
+
 export function getDurationMinutes(startAt: string, endAt: string) {
   const start = new Date(startAt).getTime()
   const end = new Date(endAt).getTime()
@@ -61,6 +65,16 @@ export function calculateLogAmount(log: LogEntry, now = new Date()) {
     log.roundingMinutes,
     log.adjustmentAmount,
   )
+}
+
+export function calculateLiveLogEstimate(log: LogEntry, now = new Date()) {
+  if (log.mode === 'flat') {
+    return roundDollar((log.flatAmount ?? 0) + log.adjustmentAmount)
+  }
+
+  const minutes = getDurationMinutes(log.startAt, now.toISOString())
+  const rawAmount = (minutes / 60) * (log.rate ?? 0) + log.adjustmentAmount
+  return roundDollar(rawAmount)
 }
 
 export function calculateUnpaidTotal(logs: LogEntry[]) {
