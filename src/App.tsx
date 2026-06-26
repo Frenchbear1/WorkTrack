@@ -12,7 +12,6 @@ import {
   Hammer,
   Home as HomeIcon,
   Loader2,
-  LocateFixed,
   LogOut,
   MapPin,
   Paintbrush,
@@ -273,6 +272,47 @@ function moveHomeSection(
   const [section] = nextOrder.splice(index, 1)
   nextOrder.splice(nextIndex, 0, section)
   return nextOrder
+}
+
+function sortPresetsByUsage(presets: JobPreset[], logs: LogEntry[]) {
+  const stats = new Map<string, { count: number; lastUsed: number }>()
+  const presetIdsByTitle = new Map<string, string[]>()
+
+  presets.forEach((preset) => {
+    const key = preset.title.trim().toLocaleLowerCase()
+    presetIdsByTitle.set(key, [...(presetIdsByTitle.get(key) ?? []), preset.id])
+  })
+
+  logs.forEach((log) => {
+    const titleMatches = presetIdsByTitle.get(log.title.trim().toLocaleLowerCase())
+    const matchedPresetId =
+      log.presetId ?? (titleMatches?.length === 1 ? titleMatches[0] : null)
+
+    if (!matchedPresetId) {
+      return
+    }
+
+    const current = stats.get(matchedPresetId) ?? { count: 0, lastUsed: 0 }
+    const startedAt = new Date(log.startAt).getTime()
+    stats.set(matchedPresetId, {
+      count: current.count + 1,
+      lastUsed: Math.max(current.lastUsed, Number.isFinite(startedAt) ? startedAt : 0),
+    })
+  })
+
+  return presets
+    .map((preset, index) => ({
+      preset,
+      index,
+      stat: stats.get(preset.id) ?? { count: 0, lastUsed: 0 },
+    }))
+    .sort(
+      (a, b) =>
+        b.stat.count - a.stat.count ||
+        b.stat.lastUsed - a.stat.lastUsed ||
+        a.index - b.index,
+    )
+    .map((entry) => entry.preset)
 }
 
 function PageFrame({
@@ -903,6 +943,7 @@ function HomeView({
   const recentLogs = getVisibleLogs(logs, false)
     .filter((log) => log.status === 'stopped')
     .slice(0, 4)
+  const quickPresets = sortPresetsByUsage(presets, logs)
   const sectionOrder = getVisibleHomeSectionOrder(settings)
   const sections: Record<HomeSectionId, ReactNode> = {
     summary: (
@@ -926,7 +967,7 @@ function HomeView({
     ),
     presets: (
       <PresetRail
-        presets={presets}
+        presets={quickPresets}
         settings={settings}
         onStartPreset={onStartPreset}
         onCreate={onCreatePreset}
@@ -1103,7 +1144,6 @@ function LogsView({
   onOpenLog,
   onToggleSelection,
   onTogglePaid,
-  onMarkSelectedPaid,
   onMarkAllPaid,
   onClearSelection,
   reducedMotion,
@@ -1121,7 +1161,6 @@ function LogsView({
   onOpenLog: (log: LogEntry) => void
   onToggleSelection: (id: string) => void
   onTogglePaid: (id: string) => void
-  onMarkSelectedPaid: () => void
   onMarkAllPaid: () => void
   onClearSelection: () => void
   reducedMotion: boolean
@@ -1169,15 +1208,6 @@ function LogsView({
           ]}
         />
         <div className="flex items-center gap-2">
-          {visibleUnpaidCount > 0 ? (
-            <button
-              type="button"
-              onClick={onMarkAllPaid}
-              className="rounded-full bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700 shadow-sm"
-            >
-              Paid ({visibleUnpaidCount})
-            </button>
-          ) : null}
           {hasSelection ? (
             <button
               type="button"
@@ -1186,19 +1216,17 @@ function LogsView({
             >
               Clear
             </button>
+          ) : visibleUnpaidCount > 0 ? (
+            <button
+              type="button"
+              onClick={onMarkAllPaid}
+              className="rounded-full bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700 shadow-sm"
+            >
+              Paid ({visibleUnpaidCount})
+            </button>
           ) : null}
         </div>
       </div>
-      {hasSelection ? (
-        <button
-          type="button"
-          onClick={onMarkSelectedPaid}
-          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white shadow-sm"
-        >
-          <Check size={17} />
-          Mark selected paid
-        </button>
-      ) : null}
       <LogsFilterPanel
         open={filtersOpen}
         presets={presets}
@@ -1374,6 +1402,32 @@ function BottomNav({
           </button>
         ))}
       </div>
+    </nav>
+  )
+}
+
+function SelectionPayBar({
+  count,
+  onMarkSelectedPaid,
+}: {
+  count: number
+  onMarkSelectedPaid: () => void
+}) {
+  return (
+    <nav className="pointer-events-none fixed bottom-[calc(env(safe-area-inset-bottom)+10px)] left-1/2 z-30 w-full max-w-[430px] -translate-x-1/2 px-7">
+      <motion.button
+        type="button"
+        onClick={onMarkSelectedPaid}
+        disabled={count === 0}
+        initial={{ opacity: 0, y: 18, scale: 0.96 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: 18, scale: 0.96 }}
+        transition={{ duration: 0.2, ease: 'easeOut' }}
+        className="pointer-events-auto flex h-16 w-full items-center justify-center gap-2 rounded-full bg-emerald-600 px-5 text-base font-semibold text-white shadow-2xl shadow-emerald-950/20 ring-1 ring-white/50 transition active:scale-[0.98] disabled:bg-stone-300 disabled:text-stone-500 disabled:shadow-none"
+      >
+        <Check size={19} />
+        {count > 0 ? `Mark selected paid (${count})` : 'No unpaid selected'}
+      </motion.button>
     </nav>
   )
 }
@@ -2109,13 +2163,11 @@ function LogDetailModal({
   onTogglePaid: (id: string) => void
   onDelete: (id: string) => void
 }) {
-  const [locationLabel, setLocationLabel] = useState('')
   const [notes, setNotes] = useState('')
   const [startAtInput, setStartAtInput] = useState('')
   const [endAtInput, setEndAtInput] = useState('')
 
   useEffect(() => {
-    setLocationLabel(log?.startLocation.label ?? '')
     setNotes(log?.notes ?? '')
     setStartAtInput(log ? toDateTimeLocalInput(new Date(log.startAt)) : '')
     setEndAtInput(
@@ -2129,6 +2181,13 @@ function LogDetailModal({
 
   const amount = calculateLogAmount(log)
   const PaidActionIcon = log.paidAt ? Undo2 : Check
+  const latitude = log.startLocation.latitude
+  const longitude = log.startLocation.longitude
+  const hasMap = latitude !== null && longitude !== null
+  const mapInset = 0.003
+  const mapSrc = hasMap
+    ? `https://www.openstreetmap.org/export/embed.html?bbox=${longitude - mapInset}%2C${latitude - mapInset}%2C${longitude + mapInset}%2C${latitude + mapInset}&layer=mapnik&marker=${latitude}%2C${longitude}`
+    : ''
   const saveDetail = () => {
     const startAt = startAtInput
       ? fromDateTimeLocalInput(startAtInput)
@@ -2148,7 +2207,6 @@ function LogDetailModal({
       notes,
       startLocation: {
         ...log.startLocation,
-        label: locationLabel,
         capturedAt: startAt,
       },
     })
@@ -2223,24 +2281,15 @@ function LogDetailModal({
             </label>
           ) : null}
         </div>
-        <label className={labelClass}>
-          Place label
-          <input
-            className={inputClass}
-            value={locationLabel}
-            onChange={(event) => setLocationLabel(event.target.value)}
-          />
-        </label>
-        {log.startLocation.latitude && log.startLocation.longitude ? (
-          <a
-            className="flex items-center gap-2 rounded-2xl bg-stone-100 px-4 py-3 text-sm font-semibold text-stone-700"
-            href={`https://maps.google.com/?q=${log.startLocation.latitude},${log.startLocation.longitude}`}
-            target="_blank"
-            rel="noreferrer"
-          >
-            <LocateFixed size={17} />
-            Open map
-          </a>
+        {hasMap ? (
+          <div className="overflow-hidden rounded-[24px] bg-stone-100 shadow-sm">
+            <iframe
+              title="Log start location"
+              src={mapSrc}
+              className="h-52 w-full border-0"
+              loading="lazy"
+            />
+          </div>
         ) : null}
         <label className={labelClass}>
           Notes
@@ -2307,6 +2356,13 @@ function App() {
   const quickFlatLog = useMemo(
     () => logs.find((log) => log.id === quickFlatLogId) ?? null,
     [logs, quickFlatLogId],
+  )
+  const selectedPayableCount = useMemo(
+    () =>
+      selectedLogIds.filter((id) =>
+        logs.some((log) => log.id === id && log.status === 'stopped' && !log.paidAt),
+      ).length,
+    [logs, selectedLogIds],
   )
   const now = useTicker(Boolean(activeLog))
   const reducedMotion = false
@@ -2721,7 +2777,6 @@ function App() {
                 onOpenLog={(log) => setDetailLogId(log.id)}
                 onToggleSelection={toggleLogSelection}
                 onTogglePaid={togglePaid}
-                onMarkSelectedPaid={markSelectedPaid}
                 onMarkAllPaid={markAllPaid}
                 onClearSelection={clearSelection}
                 reducedMotion={reducedMotion}
@@ -2744,7 +2799,17 @@ function App() {
               />
             ) : null}
           </main>
-          <BottomNav view={view} onChange={setView} />
+          <AnimatePresence mode="wait">
+            {view === 'logs' && selectedLogIds.length > 0 ? (
+              <SelectionPayBar
+                key="selection-pay"
+                count={selectedPayableCount}
+                onMarkSelectedPaid={markSelectedPaid}
+              />
+            ) : (
+              <BottomNav key="bottom-nav" view={view} onChange={setView} />
+            )}
+          </AnimatePresence>
         </div>
         <StartLogModal
           open={startOpen}
