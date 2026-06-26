@@ -37,9 +37,14 @@ export function useAuthSession() {
   useEffect(() => {
     let isCancelled = false
     let unsubscribe: (() => void) | undefined
+    let authReadyFallback: number | undefined
 
     const markReady = () => {
       if (!isCancelled) {
+        if (authReadyFallback) {
+          window.clearTimeout(authReadyFallback)
+          authReadyFallback = undefined
+        }
         setIsReady(true)
       }
     }
@@ -58,14 +63,14 @@ export function useAuthSession() {
       return
     }
 
-    const authReadyFallback = window.setTimeout(() => {
+    authReadyFallback = window.setTimeout(() => {
       if (!isCancelled) {
         setError(
-          'Firebase Auth is taking too long. Check that this domain is authorized in Firebase.',
+          'Firebase Auth is taking too long. Check that this domain is authorized in Firebase, then refresh.',
         )
         setIsReady(true)
       }
-    }, 4500)
+    }, 15000)
 
     void prepareAuthPersistence().catch((authError: unknown) => {
       setError(
@@ -102,7 +107,9 @@ export function useAuthSession() {
 
     return () => {
       isCancelled = true
-      window.clearTimeout(authReadyFallback)
+      if (authReadyFallback) {
+        window.clearTimeout(authReadyFallback)
+      }
       unsubscribe?.()
     }
   }, [])

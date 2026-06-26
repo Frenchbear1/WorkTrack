@@ -4,6 +4,7 @@ import {
   getAuth,
   GoogleAuthProvider,
   setPersistence,
+  signInWithPopup,
   signInWithRedirect,
   signOut as firebaseSignOut,
   type Auth,
@@ -75,7 +76,16 @@ export async function signInWithGoogle() {
   }
 
   await prepareAuthPersistence()
-  await signInWithRedirect(firebase.auth, new GoogleAuthProvider())
+
+  const provider = new GoogleAuthProvider()
+  provider.setCustomParameters({ prompt: 'select_account' })
+
+  if (shouldUseRedirectSignIn()) {
+    await signInWithRedirect(firebase.auth, provider)
+    return
+  }
+
+  await signInWithPopup(firebase.auth, provider)
 }
 
 export async function signOutOfFirebase() {
@@ -84,4 +94,16 @@ export async function signOutOfFirebase() {
   if (firebase) {
     await firebaseSignOut(firebase.auth)
   }
+}
+
+function shouldUseRedirectSignIn() {
+  if (typeof window === 'undefined') {
+    return true
+  }
+
+  const userAgent = window.navigator.userAgent.toLowerCase()
+  const isIOS = /iphone|ipad|ipod/.test(userAgent)
+  const isStandalonePwa = window.matchMedia('(display-mode: standalone)').matches
+
+  return isIOS || isStandalonePwa
 }
