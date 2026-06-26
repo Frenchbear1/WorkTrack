@@ -108,12 +108,12 @@ type LogFilters = {
 }
 
 const inputClass =
-  'w-full rounded-2xl border border-stone-200 bg-white px-4 py-3 text-base text-stone-950 outline-none transition placeholder:text-stone-400 focus:border-[var(--accent)] focus:ring-4 focus:ring-[color:color-mix(in_srgb,var(--accent)_18%,transparent)]'
+  'min-w-0 w-full rounded-2xl border border-stone-200 bg-white px-4 py-3 text-base text-stone-950 outline-none transition placeholder:text-stone-400 focus:border-[var(--accent)] focus:ring-4 focus:ring-[color:color-mix(in_srgb,var(--accent)_18%,transparent)]'
 
 const selectClass =
-  'w-full rounded-2xl border border-stone-200 bg-white px-4 py-3 text-base text-stone-950 outline-none transition focus:border-[var(--accent)] focus:ring-4 focus:ring-[color:color-mix(in_srgb,var(--accent)_18%,transparent)]'
+  'min-w-0 w-full rounded-2xl border border-stone-200 bg-white px-4 py-3 text-base text-stone-950 outline-none transition focus:border-[var(--accent)] focus:ring-4 focus:ring-[color:color-mix(in_srgb,var(--accent)_18%,transparent)]'
 
-const labelClass = 'block space-y-2 text-sm font-medium text-stone-700'
+const labelClass = 'block min-w-0 space-y-2 text-sm font-medium text-stone-700'
 
 const navItems: Array<{ id: ViewName; label: string; Icon: LucideIcon }> = [
   { id: 'home', label: 'Home', Icon: HomeIcon },
@@ -906,109 +906,107 @@ function LogsFilterPanel({
   const [isOpen, setIsOpen] = useState(hasFilters)
 
   return (
-    <section className="rounded-[24px] bg-white p-4 shadow-sm">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <motion.button
-            type="button"
-            onClick={() => setIsOpen((current) => !current)}
-            whileTap={{ scale: 0.94 }}
-            className={clsx(
-              'grid size-10 shrink-0 place-items-center rounded-full transition',
-              isOpen
-                ? 'bg-[var(--accent)] text-white shadow-sm'
-                : 'bg-stone-100 text-stone-700',
-            )}
-            aria-expanded={isOpen}
-            aria-label={isOpen ? 'Hide filters' : 'Show filters'}
-            title={isOpen ? 'Hide filters' : 'Show filters'}
-          >
-            <Filter size={17} />
-          </motion.button>
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-stone-950">Filters</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-semibold text-stone-500">
-            {visibleCount} shown
-          </span>
-          {hasFilters ? (
-            <button
-              type="button"
-              onClick={onReset}
-              className="rounded-full bg-stone-100 px-3 py-1 text-xs font-semibold text-stone-600"
-            >
-              Reset
-            </button>
-          ) : null}
-        </div>
-      </div>
+    <section className="space-y-3">
+      <motion.button
+        type="button"
+        onClick={() => setIsOpen((current) => !current)}
+        whileTap={{ scale: 0.94 }}
+        className={clsx(
+          'grid size-11 place-items-center rounded-full shadow-sm transition',
+          isOpen || hasFilters
+            ? 'bg-[var(--accent)] text-white'
+            : 'bg-white text-stone-700',
+        )}
+        aria-expanded={isOpen}
+        aria-label={isOpen ? 'Hide filters' : 'Show filters'}
+        title={isOpen ? 'Hide filters' : 'Show filters'}
+      >
+        <Filter size={18} />
+      </motion.button>
       <AnimatePresence initial={false}>
         {isOpen ? (
           <motion.div
             key="filters"
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
+            initial={{ height: 0, opacity: 0, y: -6 }}
+            animate={{ height: 'auto', opacity: 1, y: 0 }}
+            exit={{ height: 0, opacity: 0, y: -6 }}
             transition={{ duration: 0.22, ease: 'easeOut' }}
             className="overflow-hidden"
           >
-            <div className="grid grid-cols-1 gap-3 pt-3 sm:grid-cols-2 lg:grid-cols-4">
-              <label className={labelClass}>
-                Preset
-                <select
-                  className={selectClass}
-                  value={filters.presetId}
-                  onChange={(event) =>
-                    onChange({ ...filters, presetId: event.target.value })
-                  }
-                >
-                  <option value="all">All jobs</option>
-                  <option value={manualPresetFilterId}>Manual</option>
-                  {presets.map((preset) => (
-                    <option key={preset.id} value={preset.id}>
-                      {preset.title}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className={labelClass}>
-                Type
-                <select
-                  className={selectClass}
-                  value={filters.mode}
-                  onChange={(event) =>
-                    onChange({ ...filters, mode: event.target.value as LogModeFilter })
-                  }
-                >
-                  <option value="all">All types</option>
-                  <option value="hourly">Hourly</option>
-                  <option value="flat">Flat</option>
-                </select>
-              </label>
-              <label className={labelClass}>
-                From
-                <input
-                  className={inputClass}
-                  type="date"
-                  value={filters.fromDate}
-                  onChange={(event) =>
-                    onChange({ ...filters, fromDate: event.target.value })
-                  }
-                />
-              </label>
-              <label className={labelClass}>
-                To
-                <input
-                  className={inputClass}
-                  type="date"
-                  value={filters.toDate}
-                  onChange={(event) =>
-                    onChange({ ...filters, toDate: event.target.value })
-                  }
-                />
-              </label>
+            <div className="space-y-3 rounded-[24px] bg-white p-4 shadow-sm">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-semibold text-stone-950">Filters</p>
+                <div className="flex items-center gap-2">
+                  <span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-semibold text-stone-500">
+                    {visibleCount} shown
+                  </span>
+                  {hasFilters ? (
+                    <button
+                      type="button"
+                      onClick={onReset}
+                      className="rounded-full bg-stone-100 px-3 py-1 text-xs font-semibold text-stone-600"
+                    >
+                      Reset
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <label className={labelClass}>
+                  Preset
+                  <select
+                    className={selectClass}
+                    value={filters.presetId}
+                    onChange={(event) =>
+                      onChange({ ...filters, presetId: event.target.value })
+                    }
+                  >
+                    <option value="all">All jobs</option>
+                    <option value={manualPresetFilterId}>Manual</option>
+                    {presets.map((preset) => (
+                      <option key={preset.id} value={preset.id}>
+                        {preset.title}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className={labelClass}>
+                  Type
+                  <select
+                    className={selectClass}
+                    value={filters.mode}
+                    onChange={(event) =>
+                      onChange({ ...filters, mode: event.target.value as LogModeFilter })
+                    }
+                  >
+                    <option value="all">All types</option>
+                    <option value="hourly">Hourly</option>
+                    <option value="flat">Flat</option>
+                  </select>
+                </label>
+                <label className={labelClass}>
+                  From
+                  <input
+                    className={inputClass}
+                    type="date"
+                    value={filters.fromDate}
+                    onChange={(event) =>
+                      onChange({ ...filters, fromDate: event.target.value })
+                    }
+                  />
+                </label>
+                <label className={labelClass}>
+                  To
+                  <input
+                    className={inputClass}
+                    type="date"
+                    value={filters.toDate}
+                    onChange={(event) =>
+                      onChange({ ...filters, toDate: event.target.value })
+                    }
+                  />
+                </label>
+              </div>
             </div>
           </motion.div>
         ) : null}

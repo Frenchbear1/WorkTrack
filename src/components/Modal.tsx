@@ -44,7 +44,9 @@ export function Modal({ open, title, onClose, children, footer }: ModalProps) {
                 <X size={19} />
               </button>
             </header>
-            <div className="max-h-[70svh] overflow-y-auto px-5 py-4">{children}</div>
+            <div className="max-h-[70svh] overflow-x-hidden overflow-y-auto px-5 py-4">
+              {children}
+            </div>
             {footer ? (
               <footer className="border-t border-stone-200/70 px-5 py-4">
                 {footer}

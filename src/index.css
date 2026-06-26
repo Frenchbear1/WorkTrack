@@ -138,6 +138,23 @@ select {
   font-size: 16px;
 }
 
+input[type="date"],
+input[type="datetime-local"],
+input[type="time"] {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+input[type="date"]::-webkit-date-and-time-value,
+input[type="datetime-local"]::-webkit-date-and-time-value,
+input[type="time"]::-webkit-date-and-time-value {
+  min-width: 0;
+  text-align: left;
+}
+
 #root {
   min-height: 100svh;
 }
