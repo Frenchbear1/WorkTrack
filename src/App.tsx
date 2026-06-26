@@ -14,7 +14,6 @@ import {
   LocateFixed,
   LogOut,
   MapPin,
-  Moon,
   Paintbrush,
   Pencil,
   Play,
@@ -22,11 +21,9 @@ import {
   ReceiptText,
   Save,
   Settings,
-  SlidersHorizontal,
   Square,
   SquareCheckBig,
   StopCircle,
-  Sun,
   Trash2,
   Truck,
   Undo2,
@@ -1674,27 +1671,16 @@ function SettingsModal({
             })}
           </div>
         </div>
-        <label className={labelClass}>
-          Default rate
-          <input
-            className={inputClass}
-            inputMode="decimal"
-            value={draft.defaultRate}
-            onChange={(event) =>
-              setDraft({ ...draft, defaultRate: numberFromInput(event.target.value) })
-            }
-          />
-        </label>
         <div className="grid grid-cols-2 gap-3">
           <label className={labelClass}>
-            Currency
+            Default rate
             <input
               className={inputClass}
-              value={draft.currency}
+              inputMode="decimal"
+              value={draft.defaultRate}
               onChange={(event) =>
-                setDraft({ ...draft, currency: event.target.value.toUpperCase() })
+                setDraft({ ...draft, defaultRate: numberFromInput(event.target.value) })
               }
-              maxLength={3}
             />
           </label>
           <label className={labelClass}>
@@ -1711,18 +1697,6 @@ function SettingsModal({
               }
             />
           </label>
-        </div>
-        <div className="space-y-2">
-          <p className="text-sm font-medium text-stone-700">Theme</p>
-          <Segmented
-            value={draft.theme}
-            onChange={(value) => setDraft({ ...draft, theme: value as UserSettings['theme'] })}
-            options={[
-              { value: 'system', label: 'System', Icon: SlidersHorizontal },
-              { value: 'light', label: 'Light', Icon: Sun },
-              { value: 'dark', label: 'Dark', Icon: Moon },
-            ]}
-          />
         </div>
         <div className="space-y-2">
           <p className="text-sm font-medium text-stone-700">Accent</p>
@@ -2026,28 +2000,9 @@ function App() {
   }, [settings.accentColor])
 
   useEffect(() => {
-    const systemTheme = window.matchMedia('(prefers-color-scheme: dark)')
-    const applyTheme = () => {
-      const effectiveTheme =
-        settings.theme === 'system'
-          ? systemTheme.matches
-            ? 'dark'
-            : 'light'
-          : settings.theme
-
-      document.documentElement.dataset.theme = effectiveTheme
-      document.documentElement.style.colorScheme = effectiveTheme
-    }
-
-    applyTheme()
-
-    if (settings.theme !== 'system') {
-      return
-    }
-
-    systemTheme.addEventListener('change', applyTheme)
-    return () => systemTheme.removeEventListener('change', applyTheme)
-  }, [settings.theme])
+    document.documentElement.dataset.theme = 'light'
+    document.documentElement.style.colorScheme = 'light'
+  }, [])
 
   useEffect(() => {
     if (!session) {

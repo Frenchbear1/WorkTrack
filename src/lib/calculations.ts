@@ -11,7 +11,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   currency: 'USD',
   defaultRate: 45,
   roundingMinutes: 15,
-  theme: 'system',
+  theme: 'light',
   accentColor: '#247C6D',
   locationMode: 'ask',
   hidePaidByDefault: true,
@@ -128,6 +128,7 @@ export function mergeSettings(settings: UserSettings | null) {
 
   return {
     ...merged,
+    theme: 'light' as const,
     homeSectionOrder: normalizeHomeSectionOrder(merged.homeSectionOrder),
   }
 }
