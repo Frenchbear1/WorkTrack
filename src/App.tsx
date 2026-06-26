@@ -1046,15 +1046,15 @@ function BottomNav({
   onChange: (view: ViewName) => void
 }) {
   return (
-    <nav className="pointer-events-none fixed bottom-[calc(env(safe-area-inset-bottom)+14px)] left-1/2 z-30 w-full max-w-[430px] -translate-x-1/2 px-5">
-      <div className="pointer-events-auto mx-auto grid max-w-[390px] grid-cols-3 items-center gap-1 rounded-full border border-white/60 bg-white/55 p-1.5 shadow-2xl shadow-stone-950/15 ring-1 ring-stone-950/5 backdrop-blur-2xl">
+    <nav className="pointer-events-none fixed bottom-[calc(env(safe-area-inset-bottom)+10px)] left-1/2 z-30 w-full max-w-[430px] -translate-x-1/2 px-7">
+      <div className="pointer-events-auto mx-auto grid max-w-[330px] grid-cols-3 items-center gap-1 rounded-full border border-white/60 bg-white/55 p-1 shadow-2xl shadow-stone-950/15 ring-1 ring-stone-950/5 backdrop-blur-2xl">
         {navItems.map(({ id, label, Icon }) => (
           <button
             key={id}
             type="button"
             onClick={() => onChange(id)}
             className={clsx(
-              'flex h-[72px] min-w-0 flex-col items-center justify-center gap-1.5 rounded-full px-4 py-3 text-sm font-semibold',
+              'flex h-14 min-w-0 flex-col items-center justify-center gap-0.5 rounded-full px-3 py-2 text-xs font-semibold',
               view === id
                 ? 'bg-white/90 text-stone-950 shadow-sm'
                 : 'text-stone-600 hover:bg-white/35',
@@ -1062,8 +1062,8 @@ function BottomNav({
             aria-label={label}
             title={label}
           >
-            <Icon className="shrink-0" size={20} />
-            <span className="block min-h-6 whitespace-nowrap text-center leading-6">
+            <Icon className="shrink-0" size={19} />
+            <span className="block min-h-[19px] whitespace-nowrap text-center leading-[19px]">
               {label}
             </span>
           </button>
