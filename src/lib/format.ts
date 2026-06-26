@@ -42,13 +42,13 @@ export function formatClockRange(startAt: string, endAt: string | null) {
 }
 
 export function getWeekKey(value: string) {
-  return format(startOfWeek(new Date(value)), 'yyyy-MM-dd')
+  return format(startOfWeek(new Date(value), { weekStartsOn: 1 }), 'yyyy-MM-dd')
 }
 
 export function formatWeekRange(value: string) {
   const date = new Date(value)
-  const start = startOfWeek(date)
-  const end = endOfWeek(date)
+  const start = startOfWeek(date, { weekStartsOn: 1 })
+  const end = endOfWeek(date, { weekStartsOn: 1 })
 
   if (start.getFullYear() === end.getFullYear()) {
     return `${format(start, 'MMM d')} - ${format(end, 'MMM d, yyyy')}`

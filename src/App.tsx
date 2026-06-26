@@ -1,5 +1,7 @@
 import { MotionConfig, motion, useReducedMotion } from 'framer-motion'
 import {
+  ArrowDown,
+  ArrowUp,
   BriefcaseBusiness,
   Check,
   CircleDollarSign,
@@ -27,6 +29,7 @@ import {
   Sun,
   Trash2,
   Truck,
+  Undo2,
   UserRound,
   WalletCards,
   Wrench,
@@ -40,10 +43,12 @@ import {
   calculateLogAmount,
   calculateLiveLogEstimate,
   calculateUnpaidTotal,
+  DEFAULT_HOME_SECTION_ORDER,
   getActiveLog,
   getDurationMinutes,
   getPresetRate,
   getVisibleLogs,
+  normalizeHomeSectionOrder,
 } from './lib/calculations'
 import {
   formatClockRange,
@@ -57,7 +62,15 @@ import {
 import { captureStartLocation, skippedLocation } from './lib/location'
 import { createWorkspaceRepository } from './services/repository'
 import { useWorktrackStore } from './store/worktrackStore'
-import type { JobMode, JobPreset, LogEntry, PresetIcon, SessionUser, UserSettings } from './types'
+import type {
+  HomeSectionId,
+  JobMode,
+  JobPreset,
+  LogEntry,
+  PresetIcon,
+  SessionUser,
+  UserSettings,
+} from './types'
 
 type ViewName = 'home' | 'logs' | 'presets'
 
@@ -98,6 +111,17 @@ const navItems: Array<{ id: ViewName; label: string; Icon: LucideIcon }> = [
   { id: 'presets', label: 'Presets', Icon: BriefcaseBusiness },
 ]
 
+const homeSectionOptions: Array<{
+  id: HomeSectionId
+  label: string
+  Icon: LucideIcon
+}> = [
+  { id: 'summary', label: 'Unpaid total', Icon: WalletCards },
+  { id: 'timer', label: 'Start job', Icon: Clock3 },
+  { id: 'presets', label: 'Quick presets', Icon: BriefcaseBusiness },
+  { id: 'recent', label: 'Recent unpaid', Icon: ReceiptText },
+]
+
 const accentSwatches = ['#247C6D', '#5B7CFA', '#E66D5E', '#D5972F', '#583E7A']
 const presetColors = ['#247C6D', '#5B7CFA', '#E66D5E', '#D5972F', '#334155']
 
@@ -133,6 +157,31 @@ function useTicker(enabled: boolean) {
 
 function iconForPreset(icon: PresetIcon) {
   return presetIconOptions.find((option) => option.id === icon)?.Icon ?? BriefcaseBusiness
+}
+
+function labelForHomeSection(sectionId: HomeSectionId) {
+  return (
+    homeSectionOptions.find((section) => section.id === sectionId)?.label ??
+    sectionId
+  )
+}
+
+function moveHomeSection(
+  order: readonly HomeSectionId[],
+  sectionId: HomeSectionId,
+  direction: -1 | 1,
+) {
+  const nextOrder = normalizeHomeSectionOrder(order)
+  const index = nextOrder.indexOf(sectionId)
+  const nextIndex = index + direction
+
+  if (index < 0 || nextIndex < 0 || nextIndex >= nextOrder.length) {
+    return nextOrder
+  }
+
+  const [section] = nextOrder.splice(index, 1)
+  nextOrder.splice(nextIndex, 0, section)
+  return nextOrder
 }
 
 function PageFrame({
@@ -545,6 +594,7 @@ function LogCard({
   settings,
   selected,
   selectionMode,
+  isPayTarget,
   onSelect,
   onOpen,
   onTogglePaid,
@@ -553,6 +603,7 @@ function LogCard({
   settings: UserSettings
   selected: boolean
   selectionMode: boolean
+  isPayTarget: boolean
   onSelect: () => void
   onOpen: () => void
   onTogglePaid: () => void
@@ -560,9 +611,21 @@ function LogCard({
   const amount = calculateLogAmount(log)
   const isPaid = Boolean(log.paidAt)
   const statusLabel = log.status === 'active' ? 'Running' : isPaid ? 'Paid' : 'Unpaid'
+  const PaidActionIcon = isPaid ? Undo2 : Check
 
   return (
-    <article className="rounded-[24px] bg-white p-4 shadow-sm">
+    <motion.article
+      layout
+      animate={{
+        scale: selected || isPayTarget ? 0.99 : 1,
+      }}
+      className={clsx(
+        'rounded-[24px] bg-white p-4 shadow-sm ring-1 transition-colors',
+        selected || isPayTarget
+          ? 'ring-[color:color-mix(in_srgb,var(--accent)_24%,transparent)]'
+          : 'ring-transparent',
+      )}
+    >
       <div className="flex items-start gap-3">
         {selectionMode ? (
           <button
@@ -617,14 +680,14 @@ function LogCard({
           onClick={onTogglePaid}
           className={clsx(
             'grid size-10 shrink-0 place-items-center rounded-full transition',
-            isPaid ? 'bg-stone-100 text-stone-500' : 'bg-emerald-50 text-emerald-700',
+            isPaid ? 'bg-orange-50 text-orange-700' : 'bg-emerald-50 text-emerald-700',
           )}
           title={isPaid ? 'Mark unpaid' : 'Mark paid'}
         >
-          <Check size={18} />
+          <PaidActionIcon size={18} />
         </button>
       </div>
-    </article>
+    </motion.article>
   )
 }
 
@@ -662,28 +725,36 @@ function HomeView({
   const recentLogs = getVisibleLogs(logs, false)
     .filter((log) => log.status === 'stopped')
     .slice(0, 4)
-
-  return (
-    <PageFrame reducedMotion={reducedMotion}>
+  const sectionOrder = normalizeHomeSectionOrder(settings.homeSectionOrder)
+  const sections: Record<HomeSectionId, ReactNode> = {
+    summary: (
       <SummaryBand total={unpaidTotal} count={unpaidCount} settings={settings} />
-      <TimerCard
-        activeLog={activeLog}
-        now={now}
-        settings={settings}
-        onStart={onStart}
-        onStop={onStop}
-      />
-      <QuickFlatReceipt
-        log={quickFlatLog}
-        settings={settings}
-        onOpen={() => quickFlatLog && onOpenLog(quickFlatLog)}
-      />
+    ),
+    timer: (
+      <>
+        <TimerCard
+          activeLog={activeLog}
+          now={now}
+          settings={settings}
+          onStart={onStart}
+          onStop={onStop}
+        />
+        <QuickFlatReceipt
+          log={quickFlatLog}
+          settings={settings}
+          onOpen={() => quickFlatLog && onOpenLog(quickFlatLog)}
+        />
+      </>
+    ),
+    presets: (
       <PresetRail
         presets={presets}
         settings={settings}
         onStartPreset={onStartPreset}
         onCreate={onCreatePreset}
       />
+    ),
+    recent: (
       <section className="space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold text-stone-950">Recent unpaid</h2>
@@ -708,6 +779,7 @@ function HomeView({
               settings={settings}
               selected={false}
               selectionMode={false}
+              isPayTarget={false}
               onSelect={() => undefined}
               onOpen={() => onOpenLog(log)}
               onTogglePaid={() => onOpenLog(log)}
@@ -715,6 +787,16 @@ function HomeView({
           ))
         )}
       </section>
+    ),
+  }
+
+  return (
+    <PageFrame reducedMotion={reducedMotion}>
+      {sectionOrder.map((sectionId) => (
+        <motion.div key={sectionId} layout>
+          {sections[sectionId]}
+        </motion.div>
+      ))}
     </PageFrame>
   )
 }
@@ -724,6 +806,7 @@ function LogsView({
   settings,
   showPaid,
   selectedLogIds,
+  payTargetIds,
   onShowPaid,
   onOpenLog,
   onToggleSelection,
@@ -737,6 +820,7 @@ function LogsView({
   settings: UserSettings
   showPaid: boolean
   selectedLogIds: string[]
+  payTargetIds: string[]
   onShowPaid: (showPaid: boolean) => void
   onOpenLog: (log: LogEntry) => void
   onToggleSelection: (id: string) => void
@@ -748,6 +832,12 @@ function LogsView({
 }) {
   const visibleLogs = getVisibleLogs(logs, showPaid)
   const hasSelection = selectedLogIds.length > 0
+  const magneticLogIds =
+    payTargetIds.length > 0
+      ? payTargetIds
+      : selectedLogIds.length > 1
+        ? selectedLogIds
+        : []
   const unpaidCount = logs.filter(
     (log) => log.status === 'stopped' && !log.paidAt,
   ).length
@@ -820,7 +910,7 @@ function LogsView({
           </div>
         ) : (
           groupedLogs.map((group) => (
-            <section key={group.key} className="space-y-3">
+            <section key={group.key}>
               <div className="flex items-center gap-3 pt-1">
                 <span className="h-px flex-1 bg-stone-200" />
                 <p className="rounded-full bg-white/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-stone-500 shadow-sm">
@@ -828,18 +918,40 @@ function LogsView({
                 </p>
                 <span className="h-px flex-1 bg-stone-200" />
               </div>
-              {group.logs.map((log) => (
-                <LogCard
-                  key={log.id}
-                  log={log}
-                  settings={settings}
-                  selected={selectedLogIds.includes(log.id)}
-                  selectionMode
-                  onSelect={() => onToggleSelection(log.id)}
-                  onOpen={() => onOpenLog(log)}
-                  onTogglePaid={() => onTogglePaid(log.id)}
-                />
-              ))}
+              <div className="mt-3">
+                {group.logs.map((log, index) => {
+                  const isMagnetic = magneticLogIds.includes(log.id)
+                  const previousLog = group.logs[index - 1]
+                  const previousIsMagnetic = previousLog
+                    ? magneticLogIds.includes(previousLog.id)
+                    : false
+
+                  return (
+                    <motion.div
+                      key={log.id}
+                      layout
+                      className={clsx(
+                        index === 0
+                          ? ''
+                          : isMagnetic && previousIsMagnetic
+                            ? 'mt-1'
+                            : 'mt-3',
+                      )}
+                    >
+                      <LogCard
+                        log={log}
+                        settings={settings}
+                        selected={selectedLogIds.includes(log.id)}
+                        selectionMode
+                        isPayTarget={isMagnetic}
+                        onSelect={() => onToggleSelection(log.id)}
+                        onOpen={() => onOpenLog(log)}
+                        onTogglePaid={() => onTogglePaid(log.id)}
+                      />
+                    </motion.div>
+                  )
+                })}
+              </div>
             </section>
           ))
         )}
@@ -1444,6 +1556,7 @@ function SettingsModal({
     event.preventDefault()
     onSubmit(draft)
   }
+  const homeSectionOrder = normalizeHomeSectionOrder(draft.homeSectionOrder)
 
   return (
     <Modal
@@ -1484,6 +1597,81 @@ function SettingsModal({
                 Preview
               </span>
             ) : null}
+          </div>
+        </div>
+        <div className="space-y-3 rounded-2xl bg-stone-100 px-4 py-3">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm font-semibold text-stone-950">Home layout</p>
+            <button
+              type="button"
+              onClick={() =>
+                setDraft({
+                  ...draft,
+                  homeSectionOrder: [...DEFAULT_HOME_SECTION_ORDER],
+                })
+              }
+              className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-stone-600 shadow-sm"
+            >
+              Reset
+            </button>
+          </div>
+          <div className="space-y-2">
+            {homeSectionOrder.map((sectionId, index) => {
+              const option = homeSectionOptions.find(
+                (section) => section.id === sectionId,
+              )
+              const Icon = option?.Icon ?? ReceiptText
+
+              return (
+                <div
+                  key={sectionId}
+                  className="flex items-center gap-3 rounded-2xl bg-white px-3 py-2 shadow-sm"
+                >
+                  <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-stone-100 text-stone-600">
+                    <Icon size={17} />
+                  </div>
+                  <p className="min-w-0 flex-1 truncate text-sm font-semibold text-stone-800">
+                    {labelForHomeSection(sectionId)}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDraft({
+                        ...draft,
+                        homeSectionOrder: moveHomeSection(
+                          homeSectionOrder,
+                          sectionId,
+                          -1,
+                        ),
+                      })
+                    }
+                    disabled={index === 0}
+                    className="grid size-9 place-items-center rounded-full bg-stone-100 text-stone-600 disabled:opacity-30"
+                    title="Move up"
+                  >
+                    <ArrowUp size={16} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDraft({
+                        ...draft,
+                        homeSectionOrder: moveHomeSection(
+                          homeSectionOrder,
+                          sectionId,
+                          1,
+                        ),
+                      })
+                    }
+                    disabled={index === homeSectionOrder.length - 1}
+                    className="grid size-9 place-items-center rounded-full bg-stone-100 text-stone-600 disabled:opacity-30"
+                    title="Move down"
+                  >
+                    <ArrowDown size={16} />
+                  </button>
+                </div>
+              )
+            })}
           </div>
         </div>
         <label className={labelClass}>
@@ -1627,6 +1815,7 @@ function LogDetailModal({
   }
 
   const amount = calculateLogAmount(log)
+  const PaidActionIcon = log.paidAt ? Undo2 : Check
   const saveDetail = () => {
     const startAt = startAtInput
       ? fromDateTimeLocalInput(startAtInput)
@@ -1670,10 +1859,15 @@ function LogDetailModal({
           <button
             type="button"
             onClick={() => onTogglePaid(log.id)}
-            className="grid size-14 place-items-center rounded-2xl bg-emerald-50 text-emerald-700"
+            className={clsx(
+              'grid size-14 place-items-center rounded-2xl',
+              log.paidAt
+                ? 'bg-orange-50 text-orange-700'
+                : 'bg-emerald-50 text-emerald-700',
+            )}
             title={log.paidAt ? 'Mark unpaid' : 'Mark paid'}
           >
-            <Check size={19} />
+            <PaidActionIcon size={19} />
           </button>
           <button
             type="button"
@@ -1767,6 +1961,7 @@ function App() {
   const [editingPreset, setEditingPreset] = useState<JobPreset | null>(null)
   const [detailLogId, setDetailLogId] = useState<string | null>(null)
   const [quickFlatLogId, setQuickFlatLogId] = useState<string | null>(null)
+  const [payTargetIds, setPayTargetIds] = useState<string[]>([])
   const logs = useWorktrackStore((state) => state.logs)
   const presets = useWorktrackStore((state) => state.presets)
   const settings = useWorktrackStore((state) => state.settings)
@@ -2092,9 +2287,30 @@ function App() {
     }
   }
 
+  const animatePayTargets = (ids: string[], onComplete: () => void) => {
+    const uniqueIds = Array.from(new Set(ids))
+
+    if (uniqueIds.length === 0) {
+      return
+    }
+
+    if (reducedMotion) {
+      onComplete()
+      return
+    }
+
+    setPayTargetIds(uniqueIds)
+    window.setTimeout(() => {
+      onComplete()
+      window.setTimeout(() => setPayTargetIds([]), 140)
+    }, 320)
+  }
+
   const markSelectedPaid = () => {
-    const updatedLogs = markLogsPaid(selectedLogIds)
-    updatedLogs.forEach(persistLog)
+    animatePayTargets(selectedLogIds, () => {
+      const updatedLogs = markLogsPaid(selectedLogIds)
+      updatedLogs.forEach(persistLog)
+    })
   }
 
   const markAllPaid = () => {
@@ -2106,8 +2322,10 @@ function App() {
       return
     }
 
-    const updatedLogs = markLogsPaid(unpaidLogIds)
-    updatedLogs.forEach(persistLog)
+    animatePayTargets(unpaidLogIds, () => {
+      const updatedLogs = markLogsPaid(unpaidLogIds)
+      updatedLogs.forEach(persistLog)
+    })
   }
 
   const removeLog = (id: string) => {
@@ -2188,6 +2406,7 @@ function App() {
                 settings={settings}
                 showPaid={showPaid}
                 selectedLogIds={selectedLogIds}
+                payTargetIds={payTargetIds}
                 onShowPaid={setShowPaid}
                 onOpenLog={(log) => setDetailLogId(log.id)}
                 onToggleSelection={toggleLogSelection}

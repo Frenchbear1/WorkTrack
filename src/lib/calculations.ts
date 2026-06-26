@@ -1,4 +1,11 @@
-import type { JobPreset, LogEntry, UserSettings } from '../types'
+import type { HomeSectionId, JobPreset, LogEntry, UserSettings } from '../types'
+
+export const DEFAULT_HOME_SECTION_ORDER: HomeSectionId[] = [
+  'summary',
+  'timer',
+  'presets',
+  'recent',
+]
 
 export const DEFAULT_SETTINGS: UserSettings = {
   currency: 'USD',
@@ -9,6 +16,24 @@ export const DEFAULT_SETTINGS: UserSettings = {
   locationMode: 'ask',
   hidePaidByDefault: true,
   reducedMotion: false,
+  homeSectionOrder: DEFAULT_HOME_SECTION_ORDER,
+}
+
+export function normalizeHomeSectionOrder(
+  order: readonly HomeSectionId[] | null | undefined,
+) {
+  const uniqueKnownSections = (order ?? []).filter(
+    (section, index, sections) =>
+      DEFAULT_HOME_SECTION_ORDER.includes(section) &&
+      sections.indexOf(section) === index,
+  )
+
+  return [
+    ...uniqueKnownSections,
+    ...DEFAULT_HOME_SECTION_ORDER.filter(
+      (section) => !uniqueKnownSections.includes(section),
+    ),
+  ]
 }
 
 export function roundCurrency(value: number) {
@@ -99,5 +124,10 @@ export function getPresetRate(preset: JobPreset, settings: UserSettings) {
 }
 
 export function mergeSettings(settings: UserSettings | null) {
-  return { ...DEFAULT_SETTINGS, ...settings }
+  const merged = { ...DEFAULT_SETTINGS, ...settings }
+
+  return {
+    ...merged,
+    homeSectionOrder: normalizeHomeSectionOrder(merged.homeSectionOrder),
+  }
 }

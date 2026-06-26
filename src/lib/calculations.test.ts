@@ -5,11 +5,14 @@ import {
   calculateLogAmount,
   calculateUnpaidTotal,
   DEFAULT_SETTINGS,
+  mergeSettings,
+  normalizeHomeSectionOrder,
   getActiveLog,
   roundBillableMinutes,
 } from './calculations'
+import { formatWeekRange, getWeekKey } from './format'
 import { skippedLocation } from './location'
-import type { LogEntry } from '../types'
+import type { HomeSectionId, LogEntry, UserSettings } from '../types'
 
 function makeLog(patch: Partial<LogEntry> = {}): LogEntry {
   const startAt = '2026-06-26T12:00:00.000Z'
@@ -106,5 +109,31 @@ describe('billing calculations', () => {
   it('ships with useful defaults', () => {
     expect(DEFAULT_SETTINGS.currency).toBe('USD')
     expect(DEFAULT_SETTINGS.roundingMinutes).toBe(15)
+    expect(DEFAULT_SETTINGS.homeSectionOrder).toEqual([
+      'summary',
+      'timer',
+      'presets',
+      'recent',
+    ])
+  })
+
+  it('normalizes saved home layout order', () => {
+    expect(
+      normalizeHomeSectionOrder(['recent', 'timer', 'recent'] as HomeSectionId[]),
+    ).toEqual(['recent', 'timer', 'summary', 'presets'])
+
+    expect(
+      mergeSettings({
+        ...DEFAULT_SETTINGS,
+        homeSectionOrder: undefined,
+      } as unknown as UserSettings).homeSectionOrder,
+    ).toEqual(DEFAULT_SETTINGS.homeSectionOrder)
+  })
+
+  it('groups log weeks from Monday through Sunday', () => {
+    expect(getWeekKey('2026-06-28T12:00:00.000Z')).toBe('2026-06-22')
+    expect(formatWeekRange('2026-06-28T12:00:00.000Z')).toBe(
+      'Jun 22 - Jun 28, 2026',
+    )
   })
 })

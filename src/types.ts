@@ -2,6 +2,7 @@ export type JobMode = 'hourly' | 'flat'
 export type LogStatus = 'active' | 'stopped'
 export type LocationMode = 'ask' | 'off'
 export type ThemeMode = 'system' | 'light' | 'dark'
+export type HomeSectionId = 'summary' | 'timer' | 'presets' | 'recent'
 export type PresetIcon =
   | 'briefcase'
   | 'hammer'
@@ -64,6 +65,7 @@ export type UserSettings = {
   locationMode: LocationMode
   hidePaidByDefault: boolean
   reducedMotion: boolean
+  homeSectionOrder: HomeSectionId[]
 }
 
 export type SessionUser = {
