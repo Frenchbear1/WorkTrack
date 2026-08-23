@@ -63,6 +63,7 @@ export type UserSettings = {
   theme: ThemeMode
   accentColor: string
   locationMode: LocationMode
+  notesEnabled: boolean
   hidePaidByDefault: boolean
   compactLogs: boolean
   homeSectionOrder: HomeSectionId[]

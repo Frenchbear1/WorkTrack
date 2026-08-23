@@ -1,5 +1,12 @@
 import type { HomeSectionId, JobPreset, LogEntry, UserSettings } from '../types'
 
+export type PaymentBatch = {
+  id: string
+  paidAt: string
+  logs: LogEntry[]
+  total: number
+}
+
 export const DEFAULT_HOME_SECTION_ORDER: HomeSectionId[] = [
   'summary',
   'timer',
@@ -21,6 +28,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   theme: 'light',
   accentColor: '#247C6D',
   locationMode: 'ask',
+  notesEnabled: true,
   hidePaidByDefault: true,
   compactLogs: false,
   homeSectionOrder: DEFAULT_HOME_SECTION_ORDER,
@@ -141,6 +149,29 @@ export function calculateUnpaidTotal(logs: LogEntry[]) {
     .reduce((sum, log) => sum + calculateLogAmount(log), 0)
 }
 
+export function groupPaidLogs(logs: LogEntry[]): PaymentBatch[] {
+  const batches = new Map<string, LogEntry[]>()
+
+  logs.forEach((log) => {
+    if (!log.paidAt) {
+      return
+    }
+
+    batches.set(log.paidAt, [...(batches.get(log.paidAt) ?? []), log])
+  })
+
+  return Array.from(batches, ([paidAt, batchLogs]) => ({
+    id: paidAt,
+    paidAt,
+    logs: batchLogs.toSorted(
+      (a, b) => new Date(b.startAt).getTime() - new Date(a.startAt).getTime(),
+    ),
+    total: batchLogs.reduce((sum, log) => sum + calculateLogAmount(log), 0),
+  })).toSorted(
+    (a, b) => new Date(b.paidAt).getTime() - new Date(a.paidAt).getTime(),
+  )
+}
+
 export function getActiveLog(logs: LogEntry[]) {
   return logs.find((log) => log.status === 'active') ?? null
 }
@@ -169,6 +200,7 @@ export function mergeSettings(settings: Partial<UserSettings> | null) {
     theme: 'light' as const,
     accentColor: merged.accentColor,
     locationMode: merged.locationMode,
+    notesEnabled: settings?.notesEnabled !== false,
     hidePaidByDefault: merged.hidePaidByDefault,
     compactLogs: Boolean(merged.compactLogs),
     homeSectionOrder: normalizeHomeSectionOrder(merged.homeSectionOrder),

@@ -10,6 +10,7 @@ import {
   normalizeHomeSectionOrder,
   normalizeHomeSectionVisibility,
   getActiveLog,
+  groupPaidLogs,
   roundBillableMinutes,
 } from './calculations'
 import { formatWeekRange, getWeekKey } from './format'
@@ -103,6 +104,19 @@ describe('billing calculations', () => {
     expect(calculateUnpaidTotal([unpaid, active, paid])).toBe(70)
   })
 
+  it('groups jobs paid together into one payment batch', () => {
+    const paidAt = '2026-06-26T15:30:00.000Z'
+    const batches = groupPaidLogs([
+      makeLog({ id: 'one', paidAt }),
+      makeLog({ id: 'two', paidAt, amountDue: 70 }),
+      makeLog({ id: 'unpaid' }),
+    ])
+
+    expect(batches).toHaveLength(1)
+    expect(batches[0].logs).toHaveLength(2)
+    expect(batches[0].total).toBe(140)
+  })
+
   it('finds the single active log', () => {
     const active = makeLog({ id: 'active', status: 'active', endAt: null })
     expect(getActiveLog([makeLog(), active])?.id).toBe('active')
@@ -118,7 +132,15 @@ describe('billing calculations', () => {
       'recent',
     ])
     expect(DEFAULT_SETTINGS.compactLogs).toBe(false)
+    expect(DEFAULT_SETTINGS.notesEnabled).toBe(true)
     expect(DEFAULT_SETTINGS.homeSectionVisibility.summary).toBe(true)
+  })
+
+  it('keeps new settings enabled when loading an older saved profile', () => {
+    const legacySettings = { ...DEFAULT_SETTINGS } as Partial<UserSettings>
+    delete legacySettings.notesEnabled
+
+    expect(mergeSettings(legacySettings).notesEnabled).toBe(true)
   })
 
   it('normalizes saved home layout order', () => {

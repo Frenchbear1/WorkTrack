@@ -4,6 +4,7 @@ import {
   ArrowUp,
   BriefcaseBusiness,
   Check,
+  ChevronDown,
   CircleDollarSign,
   Clock3,
   Eye,
@@ -32,7 +33,15 @@ import {
   Wrench,
   type LucideIcon,
 } from 'lucide-react'
-import { useEffect, useMemo, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react'
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type FormEvent,
+  type ReactNode,
+} from 'react'
 import clsx from 'clsx'
 import { Modal } from './components/Modal'
 import { useAuthSession } from './hooks/useAuthSession'
@@ -44,11 +53,13 @@ import {
   DEFAULT_HOME_SECTION_VISIBILITY,
   getActiveLog,
   getDurationMinutes,
+  groupPaidLogs,
   getPresetRate,
   getVisibleLogs,
   getVisibleHomeSectionOrder,
   normalizeHomeSectionOrder,
   normalizeHomeSectionVisibility,
+  type PaymentBatch,
 } from './lib/calculations'
 import {
   formatClockRange,
@@ -313,6 +324,19 @@ function sortPresetsByUsage(presets: JobPreset[], logs: LogEntry[]) {
         a.index - b.index,
     )
     .map((entry) => entry.preset)
+}
+
+function formatPaidTimestamp(value: string) {
+  const date = new Date(value)
+
+  if (!Number.isFinite(date.getTime())) {
+    return 'Payment date unavailable'
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(date)
 }
 
 function PageFrame({
@@ -599,7 +623,12 @@ function TimerCard({
         </p>
       </div>
       <div className="space-y-4 p-5">
-        <div className="grid grid-cols-2 gap-3">
+        <div
+          className={clsx(
+            'grid gap-3',
+            settings.locationMode === 'ask' ? 'grid-cols-2' : 'grid-cols-1',
+          )}
+        >
           <div className="rounded-2xl bg-stone-100 p-4">
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-stone-400">
               Estimate
@@ -608,14 +637,16 @@ function TimerCard({
               {formatMoney(amount, settings.currency, { whole: true })}
             </p>
           </div>
-          <div className="rounded-2xl bg-stone-100 p-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-stone-400">
-              Place
-            </p>
-            <p className="mt-2 truncate text-sm font-semibold text-stone-950">
-              {activeLog.startLocation.label || activeLog.startLocation.permissionState}
-            </p>
-          </div>
+          {settings.locationMode === 'ask' ? (
+            <div className="rounded-2xl bg-stone-100 p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-stone-400">
+                Place
+              </p>
+              <p className="mt-2 truncate text-sm font-semibold text-stone-950">
+                {activeLog.startLocation.label || activeLog.startLocation.permissionState}
+              </p>
+            </div>
+          ) : null}
         </div>
         <button
           type="button"
@@ -646,31 +677,37 @@ function QuickFlatReceipt({
   const amount = calculateLogAmount(log)
 
   return (
-    <section className="rounded-[26px] border border-emerald-100 bg-white p-4 shadow-sm">
-      <div className="flex items-center gap-3">
-        <div className="grid size-12 shrink-0 place-items-center rounded-2xl bg-emerald-50 text-emerald-700">
-          <CircleDollarSign size={23} />
+    <section className="overflow-hidden rounded-[30px] border border-emerald-100 bg-white p-5 shadow-sm">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="grid size-12 shrink-0 place-items-center rounded-2xl bg-emerald-50 text-emerald-700">
+            <Check size={23} />
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-emerald-700">Job added</p>
+            <h2 className="truncate text-2xl font-semibold text-stone-950">
+              {log.title}
+            </h2>
+          </div>
         </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-stone-400">
-            Flat receipt added
-          </p>
-          <h3 className="mt-1 truncate text-base font-semibold text-stone-950">
-            {log.title}
-          </h3>
-        </div>
-        <p className="shrink-0 text-xl font-semibold text-stone-950">
+        <p className="shrink-0 text-2xl font-semibold text-stone-950">
           {formatMoney(amount, settings.currency, { whole: true })}
         </p>
       </div>
       <button
         type="button"
         onClick={onOpen}
-        className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-stone-100 px-4 py-3 text-sm font-semibold text-stone-700"
+        className="mt-6 flex w-full items-center justify-center gap-2 rounded-[24px] bg-stone-950 px-5 py-5 text-base font-semibold text-white shadow-lg transition active:scale-[0.98]"
       >
         <ReceiptText size={16} />
         Open receipt
       </button>
+      <motion.div
+        className="mt-4 h-1 origin-left rounded-full bg-emerald-500"
+        initial={{ scaleX: 1 }}
+        animate={{ scaleX: 0 }}
+        transition={{ duration: 5, ease: 'linear' }}
+      />
     </section>
   )
 }
@@ -680,11 +717,13 @@ function PresetRail({
   settings,
   onStartPreset,
   onCreate,
+  disabled,
 }: {
   presets: JobPreset[]
   settings: UserSettings
   onStartPreset: (preset: JobPreset) => void
   onCreate: () => void
+  disabled: boolean
 }) {
   return (
     <section className="space-y-3">
@@ -717,7 +756,8 @@ function PresetRail({
                 key={preset.id}
                 type="button"
                 onClick={() => onStartPreset(preset)}
-                className="min-w-[150px] snap-start rounded-[24px] bg-white p-4 text-left shadow-sm transition active:scale-[0.98]"
+                disabled={disabled}
+                className="min-w-[150px] snap-start rounded-[24px] bg-white p-4 text-left shadow-sm transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45 disabled:active:scale-100"
               >
                 <span
                   className="grid size-11 place-items-center rounded-2xl text-white"
@@ -751,7 +791,6 @@ function LogCard({
   compact,
   onSelect,
   onOpen,
-  onTogglePaid,
 }: {
   log: LogEntry
   settings: UserSettings
@@ -761,12 +800,10 @@ function LogCard({
   compact: boolean
   onSelect: () => void
   onOpen: () => void
-  onTogglePaid: () => void
 }) {
   const amount = calculateLogAmount(log)
   const isPaid = Boolean(log.paidAt)
   const statusLabel = log.status === 'active' ? 'Running' : isPaid ? 'Paid' : 'Unpaid'
-  const PaidActionIcon = isPaid ? Undo2 : Check
   const hasLocation =
     Boolean(log.startLocation.label) ||
     log.startLocation.permissionState === 'granted' ||
@@ -809,19 +846,6 @@ function LogCard({
             <p className="shrink-0 text-sm font-semibold text-stone-950 sm:text-base">
               {formatMoney(amount, settings.currency, { whole: true })}
             </p>
-          </button>
-          <button
-            type="button"
-            onClick={onTogglePaid}
-            className={clsx(
-              'grid size-9 shrink-0 place-items-center rounded-full transition',
-              isPaid
-                ? 'bg-orange-50 text-orange-700'
-                : 'bg-emerald-50 text-emerald-700',
-            )}
-            title={isPaid ? 'Mark unpaid' : 'Mark paid'}
-          >
-            <PaidActionIcon size={17} />
           </button>
         </div>
       </motion.article>
@@ -893,17 +917,6 @@ function LogCard({
             ) : null}
           </div>
         </button>
-        <button
-          type="button"
-          onClick={onTogglePaid}
-          className={clsx(
-            'grid size-10 shrink-0 place-items-center rounded-full transition',
-            isPaid ? 'bg-orange-50 text-orange-700' : 'bg-emerald-50 text-emerald-700',
-          )}
-          title={isPaid ? 'Mark unpaid' : 'Mark paid'}
-        >
-          <PaidActionIcon size={18} />
-        </button>
       </div>
     </motion.article>
   )
@@ -915,6 +928,7 @@ function HomeView({
   settings,
   activeLog,
   quickFlatLog,
+  presetsLocked,
   now,
   onStart,
   onStop,
@@ -929,6 +943,7 @@ function HomeView({
   settings: UserSettings
   activeLog: LogEntry | null
   quickFlatLog: LogEntry | null
+  presetsLocked: boolean
   now: Date
   onStart: () => void
   onStop: () => void
@@ -950,20 +965,38 @@ function HomeView({
       <SummaryBand total={unpaidTotal} count={unpaidCount} settings={settings} />
     ),
     timer: (
-      <>
-        <TimerCard
-          activeLog={activeLog}
-          now={now}
-          settings={settings}
-          onStart={onStart}
-          onStop={onStop}
-        />
-        <QuickFlatReceipt
-          log={quickFlatLog}
-          settings={settings}
-          onOpen={() => quickFlatLog && onOpenLog(quickFlatLog)}
-        />
-      </>
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.div
+          key={
+            activeLog
+              ? `active-${activeLog.id}`
+              : quickFlatLog
+                ? `receipt-${quickFlatLog.id}`
+                : 'ready'
+          }
+          layout
+          initial={{ opacity: 0, y: 16, scale: 0.97 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: -12, scale: 0.98 }}
+          transition={{ duration: 0.28, ease: 'easeOut' }}
+        >
+          {quickFlatLog && !activeLog ? (
+            <QuickFlatReceipt
+              log={quickFlatLog}
+              settings={settings}
+              onOpen={() => onOpenLog(quickFlatLog)}
+            />
+          ) : (
+            <TimerCard
+              activeLog={activeLog}
+              now={now}
+              settings={settings}
+              onStart={onStart}
+              onStop={onStop}
+            />
+          )}
+        </motion.div>
+      </AnimatePresence>
     ),
     presets: (
       <PresetRail
@@ -971,6 +1004,7 @@ function HomeView({
         settings={settings}
         onStartPreset={onStartPreset}
         onCreate={onCreatePreset}
+        disabled={presetsLocked}
       />
     ),
     recent: (
@@ -1002,7 +1036,6 @@ function HomeView({
               compact={settings.compactLogs}
               onSelect={() => undefined}
               onOpen={() => onOpenLog(log)}
-              onTogglePaid={() => onOpenLog(log)}
             />
           ))
         )}
@@ -1130,6 +1163,87 @@ function LogsFilterPanel({
   )
 }
 
+function PaymentBatchCard({
+  batch,
+  settings,
+  expanded,
+  selectedLogIds,
+  payTargetIds,
+  onToggleExpanded,
+  onToggleSelection,
+  onOpenLog,
+}: {
+  batch: PaymentBatch
+  settings: UserSettings
+  expanded: boolean
+  selectedLogIds: string[]
+  payTargetIds: string[]
+  onToggleExpanded: () => void
+  onToggleSelection: (id: string) => void
+  onOpenLog: (log: LogEntry) => void
+}) {
+  return (
+    <motion.section layout className="overflow-hidden rounded-[26px] bg-white shadow-sm">
+      <button
+        type="button"
+        onClick={onToggleExpanded}
+        className="flex w-full items-center gap-4 p-4 text-left"
+        aria-expanded={expanded}
+      >
+        <div className="grid size-12 shrink-0 place-items-center rounded-2xl bg-emerald-50 text-emerald-700">
+          <WalletCards size={22} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold text-stone-950">
+            {batch.logs.length} {batch.logs.length === 1 ? 'job' : 'jobs'} paid
+          </p>
+          <p className="mt-0.5 truncate text-sm text-stone-500">
+            {formatPaidTimestamp(batch.paidAt)}
+          </p>
+        </div>
+        <div className="shrink-0 text-right">
+          <p className="text-lg font-semibold text-stone-950">
+            {formatMoney(batch.total, settings.currency, { whole: true })}
+          </p>
+          <motion.span
+            className="mt-1 inline-grid size-7 place-items-center rounded-full bg-stone-100 text-stone-500"
+            animate={{ rotate: expanded ? 180 : 0 }}
+          >
+            <ChevronDown size={16} />
+          </motion.span>
+        </div>
+      </button>
+      <AnimatePresence initial={false}>
+        {expanded ? (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.24, ease: 'easeOut' }}
+            className="overflow-hidden"
+          >
+            <div className="space-y-2 border-t border-stone-100 bg-stone-50/70 p-3">
+              {batch.logs.map((log) => (
+                <LogCard
+                  key={log.id}
+                  log={log}
+                  settings={settings}
+                  selected={selectedLogIds.includes(log.id)}
+                  selectionMode
+                  isPayTarget={payTargetIds.includes(log.id)}
+                  compact={settings.compactLogs}
+                  onSelect={() => onToggleSelection(log.id)}
+                  onOpen={() => onOpenLog(log)}
+                />
+              ))}
+            </div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+    </motion.section>
+  )
+}
+
 function LogsView({
   logs,
   presets,
@@ -1143,8 +1257,7 @@ function LogsView({
   onShowPaid,
   onOpenLog,
   onToggleSelection,
-  onTogglePaid,
-  onMarkAllPaid,
+  onSelectAll,
   onClearSelection,
   reducedMotion,
 }: {
@@ -1160,12 +1273,15 @@ function LogsView({
   onShowPaid: (showPaid: boolean) => void
   onOpenLog: (log: LogEntry) => void
   onToggleSelection: (id: string) => void
-  onTogglePaid: (id: string) => void
-  onMarkAllPaid: () => void
+  onSelectAll: (ids: string[]) => void
   onClearSelection: () => void
   reducedMotion: boolean
 }) {
-  const visibleLogs = getFilteredVisibleLogs(logs, showPaid, filters)
+  const [expandedPaymentId, setExpandedPaymentId] = useState<string | null>(null)
+  const visibleLogs = useMemo(
+    () => getFilteredVisibleLogs(logs, showPaid, filters),
+    [filters, logs, showPaid],
+  )
   const hasSelection = selectedLogIds.length > 0
   const magneticLogIds =
     payTargetIds.length > 0
@@ -1173,10 +1289,18 @@ function LogsView({
       : selectedLogIds.length > 1
         ? selectedLogIds
         : []
-  const visibleUnpaidCount = visibleLogs.filter(
-    (log) => log.status === 'stopped' && !log.paidAt,
-  ).length
-  const groupedLogs = visibleLogs.reduce<Array<{ key: string; label: string; logs: LogEntry[] }>>(
+  const selectableVisibleIds = visibleLogs
+    .filter((log) => log.status === 'stopped')
+    .map((log) => log.id)
+  const allVisibleSelected =
+    selectableVisibleIds.length > 0 &&
+    selectableVisibleIds.every((id) => selectedLogIds.includes(id))
+  const paidBatches = useMemo(
+    () => (showPaid ? groupPaidLogs(visibleLogs) : []),
+    [showPaid, visibleLogs],
+  )
+  const individuallyListedLogs = visibleLogs.filter((log) => !log.paidAt)
+  const groupedLogs = individuallyListedLogs.reduce<Array<{ key: string; label: string; logs: LogEntry[] }>>(
     (groups, log) => {
       const key = getWeekKey(log.startAt)
       const group = groups.find((entry) => entry.key === key)
@@ -1216,13 +1340,15 @@ function LogsView({
             >
               Clear
             </button>
-          ) : visibleUnpaidCount > 0 ? (
+          ) : null}
+          {selectableVisibleIds.length > 0 ? (
             <button
               type="button"
-              onClick={onMarkAllPaid}
-              className="rounded-full bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700 shadow-sm"
+              onClick={() => onSelectAll(selectableVisibleIds)}
+              disabled={allVisibleSelected}
+              className="rounded-full bg-white px-4 py-3 text-sm font-semibold text-stone-700 shadow-sm disabled:text-stone-400"
             >
-              Paid ({visibleUnpaidCount})
+              {allVisibleSelected ? 'All selected' : 'Select all'}
             </button>
           ) : null}
         </div>
@@ -1235,60 +1361,93 @@ function LogsView({
         onChange={onFiltersChange}
         onReset={() => onFiltersChange(defaultLogFilters)}
       />
-      <div className="space-y-3">
-        {visibleLogs.length === 0 ? (
-          <div className="rounded-[24px] border border-dashed border-stone-300 bg-white px-4 py-8 text-center text-sm font-semibold text-stone-500">
-            No logs here
-          </div>
-        ) : (
-          groupedLogs.map((group) => (
-            <section key={group.key}>
-              <div className="flex items-center gap-3 pt-1">
-                <span className="h-px flex-1 bg-stone-200" />
-                <p className="rounded-full bg-white/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-stone-500 shadow-sm">
-                  {group.label}
-                </p>
-                <span className="h-px flex-1 bg-stone-200" />
+      {visibleLogs.length === 0 ? (
+        <div className="rounded-[24px] border border-dashed border-stone-300 bg-white px-4 py-8 text-center text-sm font-semibold text-stone-500">
+          No logs here
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {paidBatches.length > 0 ? (
+            <section className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-stone-950">Payment history</h2>
+                <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                  {paidBatches.length} {paidBatches.length === 1 ? 'payment' : 'payments'}
+                </span>
               </div>
-              <div className="mt-3">
-                {group.logs.map((log, index) => {
-                  const isMagnetic = magneticLogIds.includes(log.id)
-                  const previousLog = group.logs[index - 1]
-                  const previousIsMagnetic = previousLog
-                    ? magneticLogIds.includes(previousLog.id)
-                    : false
-
-                  return (
-                    <motion.div
-                      key={log.id}
-                      layout
-                      className={clsx(
-                        index === 0
-                          ? ''
-                          : isMagnetic && previousIsMagnetic
-                            ? 'mt-1'
-                            : 'mt-3',
-                      )}
-                    >
-                      <LogCard
-                        log={log}
-                        settings={settings}
-                        selected={selectedLogIds.includes(log.id)}
-                        selectionMode
-                        isPayTarget={isMagnetic}
-                        compact={settings.compactLogs}
-                        onSelect={() => onToggleSelection(log.id)}
-                        onOpen={() => onOpenLog(log)}
-                        onTogglePaid={() => onTogglePaid(log.id)}
-                      />
-                    </motion.div>
-                  )
-                })}
-              </div>
+              {paidBatches.map((batch) => (
+                <PaymentBatchCard
+                  key={batch.id}
+                  batch={batch}
+                  settings={settings}
+                  expanded={expandedPaymentId === batch.id}
+                  selectedLogIds={selectedLogIds}
+                  payTargetIds={magneticLogIds}
+                  onToggleExpanded={() =>
+                    setExpandedPaymentId((currentId) =>
+                      currentId === batch.id ? null : batch.id,
+                    )
+                  }
+                  onToggleSelection={onToggleSelection}
+                  onOpenLog={onOpenLog}
+                />
+              ))}
             </section>
-          ))
-        )}
-      </div>
+          ) : null}
+          {groupedLogs.length > 0 ? (
+            <div className="space-y-3">
+              {paidBatches.length > 0 ? (
+                <h2 className="text-lg font-semibold text-stone-950">Open jobs</h2>
+              ) : null}
+              {groupedLogs.map((group) => (
+                <section key={group.key}>
+                  <div className="flex items-center gap-3 pt-1">
+                    <span className="h-px flex-1 bg-stone-200" />
+                    <p className="rounded-full bg-white/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-stone-500 shadow-sm">
+                      {group.label}
+                    </p>
+                    <span className="h-px flex-1 bg-stone-200" />
+                  </div>
+                  <div className="mt-3">
+                    {group.logs.map((log, index) => {
+                      const isMagnetic = magneticLogIds.includes(log.id)
+                      const previousLog = group.logs[index - 1]
+                      const previousIsMagnetic = previousLog
+                        ? magneticLogIds.includes(previousLog.id)
+                        : false
+
+                      return (
+                        <motion.div
+                          key={log.id}
+                          layout
+                          className={clsx(
+                            index === 0
+                              ? ''
+                              : isMagnetic && previousIsMagnetic
+                                ? 'mt-1'
+                                : 'mt-3',
+                          )}
+                        >
+                          <LogCard
+                            log={log}
+                            settings={settings}
+                            selected={selectedLogIds.includes(log.id)}
+                            selectionMode={log.status === 'stopped'}
+                            isPayTarget={isMagnetic}
+                            compact={settings.compactLogs}
+                            onSelect={() => onToggleSelection(log.id)}
+                            onOpen={() => onOpenLog(log)}
+                          />
+                        </motion.div>
+                      )
+                    })}
+                  </div>
+                </section>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      )}
     </PageFrame>
   )
 }
@@ -1299,6 +1458,7 @@ function PresetsView({
   onCreate,
   onEdit,
   onStartPreset,
+  disabled,
   reducedMotion,
 }: {
   presets: JobPreset[]
@@ -1306,6 +1466,7 @@ function PresetsView({
   onCreate: () => void
   onEdit: (preset: JobPreset) => void
   onStartPreset: (preset: JobPreset) => void
+  disabled: boolean
   reducedMotion: boolean
 }) {
   return (
@@ -1348,7 +1509,8 @@ function PresetsView({
                   <button
                     type="button"
                     onClick={() => onStartPreset(preset)}
-                    className="grid size-10 place-items-center rounded-full bg-stone-950 text-white"
+                    disabled={disabled}
+                    className="grid size-10 place-items-center rounded-full bg-stone-950 text-white transition disabled:cursor-not-allowed disabled:bg-stone-300 disabled:text-stone-500"
                     title="Start preset"
                   >
                     <Play fill="currentColor" size={17} />
@@ -1407,27 +1569,44 @@ function BottomNav({
 }
 
 function SelectionPayBar({
-  count,
+  payableCount,
+  paidCount,
   onMarkSelectedPaid,
+  onMarkSelectedUnpaid,
 }: {
-  count: number
+  payableCount: number
+  paidCount: number
   onMarkSelectedPaid: () => void
+  onMarkSelectedUnpaid: () => void
 }) {
   return (
     <nav className="pointer-events-none fixed bottom-[calc(env(safe-area-inset-bottom)+10px)] left-1/2 z-30 w-full max-w-[430px] -translate-x-1/2 px-7">
-      <motion.button
-        type="button"
-        onClick={onMarkSelectedPaid}
-        disabled={count === 0}
+      <motion.div
         initial={{ opacity: 0, y: 18, scale: 0.96 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 18, scale: 0.96 }}
         transition={{ duration: 0.2, ease: 'easeOut' }}
-        className="pointer-events-auto flex h-16 w-full items-center justify-center gap-2 rounded-full bg-emerald-600 px-5 text-base font-semibold text-white shadow-2xl shadow-emerald-950/20 ring-1 ring-white/50 transition active:scale-[0.98] disabled:bg-stone-300 disabled:text-stone-500 disabled:shadow-none"
+        className="pointer-events-auto grid grid-cols-2 gap-2 rounded-[26px] border border-white/70 bg-white/80 p-2 shadow-2xl shadow-stone-950/20 backdrop-blur-2xl"
       >
-        <Check size={19} />
-        {count > 0 ? `Mark selected paid (${count})` : 'No unpaid selected'}
-      </motion.button>
+        <button
+          type="button"
+          onClick={onMarkSelectedUnpaid}
+          disabled={paidCount === 0}
+          className="flex h-14 items-center justify-center gap-2 rounded-[19px] bg-orange-100 px-3 text-sm font-semibold text-orange-800 transition active:scale-[0.98] disabled:bg-stone-100 disabled:text-stone-400"
+        >
+          <Undo2 size={18} />
+          Unpaid{paidCount > 0 ? ` (${paidCount})` : ''}
+        </button>
+        <button
+          type="button"
+          onClick={onMarkSelectedPaid}
+          disabled={payableCount === 0}
+          className="flex h-14 items-center justify-center gap-2 rounded-[19px] bg-emerald-600 px-3 text-sm font-semibold text-white transition active:scale-[0.98] disabled:bg-stone-200 disabled:text-stone-400"
+        >
+          <Check size={18} />
+          Paid{payableCount > 0 ? ` (${payableCount})` : ''}
+        </button>
+      </motion.div>
     </nav>
   )
 }
@@ -1527,24 +1706,28 @@ function StartLogModal({
             />
           </label>
         )}
-        <label className={labelClass}>
-          Place label
-          <input
-            className={inputClass}
-            value={draft.locationLabel}
-            onChange={(event) => setDraft({ ...draft, locationLabel: event.target.value })}
-            placeholder="Maple Street"
-          />
-        </label>
-        <label className={labelClass}>
-          Notes
-          <textarea
-            className={clsx(inputClass, 'min-h-24 resize-none')}
-            value={draft.notes}
-            onChange={(event) => setDraft({ ...draft, notes: event.target.value })}
-            placeholder="Materials, customer, quick details"
-          />
-        </label>
+        {settings.locationMode === 'ask' ? (
+          <label className={labelClass}>
+            Place label
+            <input
+              className={inputClass}
+              value={draft.locationLabel}
+              onChange={(event) => setDraft({ ...draft, locationLabel: event.target.value })}
+              placeholder="Maple Street"
+            />
+          </label>
+        ) : null}
+        {settings.notesEnabled ? (
+          <label className={labelClass}>
+            Notes
+            <textarea
+              className={clsx(inputClass, 'min-h-24 resize-none')}
+              value={draft.notes}
+              onChange={(event) => setDraft({ ...draft, notes: event.target.value })}
+              placeholder="Materials, customer, quick details"
+            />
+          </label>
+        ) : null}
       </form>
     </Modal>
   )
@@ -1689,15 +1872,17 @@ function ManualLogModal({
             onChange={(event) => setDraft({ ...draft, adjustmentAmount: event.target.value })}
           />
         </label>
-        <label className={labelClass}>
-          Place label
-          <input
-            className={inputClass}
-            value={draft.locationLabel}
-            onChange={(event) => setDraft({ ...draft, locationLabel: event.target.value })}
-            placeholder="Shop, client name, address"
-          />
-        </label>
+        {settings.locationMode === 'ask' ? (
+          <label className={labelClass}>
+            Place label
+            <input
+              className={inputClass}
+              value={draft.locationLabel}
+              onChange={(event) => setDraft({ ...draft, locationLabel: event.target.value })}
+              placeholder="Shop, client name, address"
+            />
+          </label>
+        ) : null}
         <label className="flex items-center justify-between rounded-2xl bg-stone-100 px-4 py-3 text-sm font-semibold text-stone-700">
           Paid
           <input
@@ -1707,14 +1892,16 @@ function ManualLogModal({
             className="size-5 accent-[var(--accent)]"
           />
         </label>
-        <label className={labelClass}>
-          Notes
-          <textarea
-            className={clsx(inputClass, 'min-h-24 resize-none')}
-            value={draft.notes}
-            onChange={(event) => setDraft({ ...draft, notes: event.target.value })}
-          />
-        </label>
+        {settings.notesEnabled ? (
+          <label className={labelClass}>
+            Notes
+            <textarea
+              className={clsx(inputClass, 'min-h-24 resize-none')}
+              value={draft.notes}
+              onChange={(event) => setDraft({ ...draft, notes: event.target.value })}
+            />
+          </label>
+        ) : null}
       </form>
     </Modal>
   )
@@ -1871,14 +2058,16 @@ function PresetModal({
             ))}
           </div>
         </div>
-        <label className={labelClass}>
-          Notes
-          <textarea
-            className={clsx(inputClass, 'min-h-24 resize-none')}
-            value={draft.notes}
-            onChange={(event) => setDraft({ ...draft, notes: event.target.value })}
-          />
-        </label>
+        {settings.notesEnabled ? (
+          <label className={labelClass}>
+            Notes
+            <textarea
+              className={clsx(inputClass, 'min-h-24 resize-none')}
+              value={draft.notes}
+              onChange={(event) => setDraft({ ...draft, notes: event.target.value })}
+            />
+          </label>
+        ) : null}
       </form>
     </Modal>
   )
@@ -2110,8 +2299,13 @@ function SettingsModal({
             ))}
           </div>
         </div>
-        <label className="flex items-center justify-between rounded-2xl bg-stone-100 px-4 py-3 text-sm font-semibold text-stone-700">
-          Location stamp
+        <label className="flex items-center justify-between gap-4 rounded-2xl bg-stone-100 px-4 py-3 text-stone-700">
+          <span>
+            <span className="block text-sm font-semibold">Location when logging</span>
+            <span className="mt-0.5 block text-xs font-normal text-stone-500">
+              Ask for location and show place fields
+            </span>
+          </span>
           <input
             type="checkbox"
             checked={draft.locationMode === 'ask'}
@@ -2119,6 +2313,22 @@ function SettingsModal({
               setDraft({ ...draft, locationMode: event.target.checked ? 'ask' : 'off' })
             }
             className="size-5 accent-[var(--accent)]"
+          />
+        </label>
+        <label className="flex items-center justify-between gap-4 rounded-2xl bg-stone-100 px-4 py-3 text-stone-700">
+          <span>
+            <span className="block text-sm font-semibold">Notes</span>
+            <span className="mt-0.5 block text-xs font-normal text-stone-500">
+              Show note fields throughout the app
+            </span>
+          </span>
+          <input
+            type="checkbox"
+            checked={draft.notesEnabled}
+            onChange={(event) =>
+              setDraft({ ...draft, notesEnabled: event.target.checked })
+            }
+            className="size-5 shrink-0 accent-[var(--accent)]"
           />
         </label>
         <label className="flex items-center justify-between rounded-2xl bg-stone-100 px-4 py-3 text-sm font-semibold text-stone-700">
@@ -2153,14 +2363,12 @@ function LogDetailModal({
   settings,
   onClose,
   onSave,
-  onTogglePaid,
   onDelete,
 }: {
   log: LogEntry | null
   settings: UserSettings
   onClose: () => void
   onSave: (log: LogEntry, patch: Partial<LogEntry>) => void
-  onTogglePaid: (id: string) => void
   onDelete: (id: string) => void
 }) {
   const [notes, setNotes] = useState('')
@@ -2180,7 +2388,6 @@ function LogDetailModal({
   }
 
   const amount = calculateLogAmount(log)
-  const PaidActionIcon = log.paidAt ? Undo2 : Check
   const latitude = log.startLocation.latitude
   const longitude = log.startLocation.longitude
   const hasMap = latitude !== null && longitude !== null
@@ -2218,7 +2425,7 @@ function LogDetailModal({
       title="Log"
       onClose={onClose}
       footer={
-        <div className="grid grid-cols-[auto_auto_1fr] gap-3">
+        <div className="grid grid-cols-[auto_1fr] gap-3">
           <button
             type="button"
             onClick={() => onDelete(log.id)}
@@ -2226,19 +2433,6 @@ function LogDetailModal({
             title="Delete log"
           >
             <Trash2 size={19} />
-          </button>
-          <button
-            type="button"
-            onClick={() => onTogglePaid(log.id)}
-            className={clsx(
-              'grid size-14 place-items-center rounded-2xl',
-              log.paidAt
-                ? 'bg-orange-50 text-orange-700'
-                : 'bg-emerald-50 text-emerald-700',
-            )}
-            title={log.paidAt ? 'Mark unpaid' : 'Mark paid'}
-          >
-            <PaidActionIcon size={19} />
           </button>
           <button
             type="button"
@@ -2291,14 +2485,16 @@ function LogDetailModal({
             />
           </div>
         ) : null}
-        <label className={labelClass}>
-          Notes
-          <textarea
-            className={clsx(inputClass, 'min-h-28 resize-none')}
-            value={notes}
-            onChange={(event) => setNotes(event.target.value)}
-          />
-        </label>
+        {settings.notesEnabled ? (
+          <label className={labelClass}>
+            Notes
+            <textarea
+              className={clsx(inputClass, 'min-h-28 resize-none')}
+              value={notes}
+              onChange={(event) => setNotes(event.target.value)}
+            />
+          </label>
+        ) : null}
       </div>
     </Modal>
   )
@@ -2315,6 +2511,7 @@ function LoadingScreen() {
 function App() {
   const { session, isReady, error, isFirebaseConfigured, signIn, signOut } = useAuthSession()
   const [repository] = useState(() => createWorkspaceRepository())
+  const presetLockRef = useRef(false)
   const [view, setView] = useState<ViewName>('home')
   const [startOpen, setStartOpen] = useState(false)
   const [manualOpen, setManualOpen] = useState(false)
@@ -2323,6 +2520,7 @@ function App() {
   const [editingPreset, setEditingPreset] = useState<JobPreset | null>(null)
   const [detailLogId, setDetailLogId] = useState<string | null>(null)
   const [quickFlatLogId, setQuickFlatLogId] = useState<string | null>(null)
+  const [presetInteractionLocked, setPresetInteractionLocked] = useState(false)
   const [payTargetIds, setPayTargetIds] = useState<string[]>([])
   const [logFilters, setLogFilters] = useState<LogFilters>(defaultLogFilters)
   const [logFiltersOpen, setLogFiltersOpen] = useState(false)
@@ -2344,9 +2542,10 @@ function App() {
   const deletePreset = useWorktrackStore((state) => state.deletePreset)
   const updateSettings = useWorktrackStore((state) => state.updateSettings)
   const toggleLogSelection = useWorktrackStore((state) => state.toggleLogSelection)
+  const selectLogs = useWorktrackStore((state) => state.selectLogs)
   const clearSelection = useWorktrackStore((state) => state.clearSelection)
   const markLogsPaid = useWorktrackStore((state) => state.markLogsPaid)
-  const toggleLogPaid = useWorktrackStore((state) => state.toggleLogPaid)
+  const markLogsUnpaid = useWorktrackStore((state) => state.markLogsUnpaid)
   const [showPaid, setShowPaid] = useState(!settings.hidePaidByDefault)
   const activeLog = useMemo(() => getActiveLog(logs), [logs])
   const detailLog = useMemo(
@@ -2364,6 +2563,14 @@ function App() {
       ).length,
     [logs, selectedLogIds],
   )
+  const selectedPaidCount = useMemo(
+    () =>
+      selectedLogIds.filter((id) =>
+        logs.some((log) => log.id === id && log.status === 'stopped' && log.paidAt),
+      ).length,
+    [logs, selectedLogIds],
+  )
+  const presetsLocked = presetInteractionLocked || Boolean(activeLog || quickFlatLog)
   const now = useTicker(Boolean(activeLog))
   const reducedMotion = false
 
@@ -2478,7 +2685,7 @@ function App() {
       adjustmentAmount: 0,
       paid: false,
       locationLabel: draft.locationLabel.trim(),
-      notes: draft.notes,
+      notes: settings.notesEnabled ? draft.notes : '',
       startLocation: skippedLocation(startAt, draft.locationLabel.trim()),
     })
 
@@ -2520,7 +2727,7 @@ function App() {
       rate: numberFromInput(draft.rate, settings.defaultRate),
       flatAmount: numberFromInput(draft.flatAmount),
       locationLabel: draft.locationLabel.trim(),
-      notes: draft.notes,
+      notes: settings.notesEnabled ? draft.notes : '',
     })
 
     if (!log) {
@@ -2545,6 +2752,17 @@ function App() {
   }
 
   const startPreset = (preset: JobPreset) => {
+    if (presetLockRef.current || activeLog || quickFlatLogId) {
+      return
+    }
+
+    presetLockRef.current = true
+    setPresetInteractionLocked(true)
+    window.setTimeout(() => {
+      presetLockRef.current = false
+      setPresetInteractionLocked(false)
+    }, 450)
+    setView('home')
     startLogFromDraft(
       {
         title: preset.title,
@@ -2552,7 +2770,7 @@ function App() {
         rate: String(getPresetRate(preset, settings)),
         flatAmount: String(preset.defaultFlatAmount ?? 0),
         locationLabel: '',
-        notes: preset.notes,
+        notes: settings.notesEnabled ? preset.notes : '',
       },
       preset.id,
     )
@@ -2577,7 +2795,7 @@ function App() {
       adjustmentAmount: numberFromInput(draft.adjustmentAmount),
       paid: draft.paid,
       locationLabel: draft.locationLabel.trim(),
-      notes: draft.notes,
+      notes: settings.notesEnabled ? draft.notes : '',
       startLocation: skippedLocation(startAt, draft.locationLabel.trim()),
     })
 
@@ -2611,7 +2829,7 @@ function App() {
         draft.mode === 'flat' ? numberFromInput(draft.defaultFlatAmount) : null,
       icon: draft.icon,
       color: draft.color,
-      notes: draft.notes,
+      notes: settings.notesEnabled ? draft.notes : (editingPreset?.notes ?? ''),
     })
 
     persistPreset(preset)
@@ -2628,14 +2846,6 @@ function App() {
     void repository.deletePreset(session.uid, preset.id)
     setPresetOpen(false)
     setEditingPreset(null)
-  }
-
-  const togglePaid = (id: string) => {
-    const updated = toggleLogPaid(id)
-
-    if (updated) {
-      persistLog(updated)
-    }
   }
 
   const updateLogFilters = (filters: LogFilters) => {
@@ -2672,17 +2882,17 @@ function App() {
     })
   }
 
-  const markAllPaid = () => {
-    const unpaidLogIds = getFilteredVisibleLogs(logs, showPaid, logFilters)
-      .filter((log) => log.status === 'stopped' && !log.paidAt)
-      .map((log) => log.id)
+  const markSelectedUnpaid = () => {
+    const selectedPaidIds = selectedLogIds.filter((id) =>
+      logs.some((log) => log.id === id && log.status === 'stopped' && log.paidAt),
+    )
 
-    if (unpaidLogIds.length === 0) {
+    if (selectedPaidIds.length === 0) {
       return
     }
 
-    animatePayTargets(unpaidLogIds, () => {
-      const updatedLogs = markLogsPaid(unpaidLogIds)
+    animatePayTargets(selectedPaidIds, () => {
+      const updatedLogs = markLogsUnpaid(selectedPaidIds)
       updatedLogs.forEach(persistLog)
     })
   }
@@ -2749,6 +2959,7 @@ function App() {
                 settings={settings}
                 activeLog={activeLog}
                 quickFlatLog={quickFlatLog}
+                presetsLocked={presetsLocked}
                 now={now}
                 onStart={() => setStartOpen(true)}
                 onStop={stopActive}
@@ -2773,11 +2984,13 @@ function App() {
                 selectedLogIds={selectedLogIds}
                 payTargetIds={payTargetIds}
                 onFiltersChange={updateLogFilters}
-                onShowPaid={setShowPaid}
+                onShowPaid={(nextShowPaid) => {
+                  setShowPaid(nextShowPaid)
+                  clearSelection()
+                }}
                 onOpenLog={(log) => setDetailLogId(log.id)}
                 onToggleSelection={toggleLogSelection}
-                onTogglePaid={togglePaid}
-                onMarkAllPaid={markAllPaid}
+                onSelectAll={selectLogs}
                 onClearSelection={clearSelection}
                 reducedMotion={reducedMotion}
               />
@@ -2795,6 +3008,7 @@ function App() {
                   setPresetOpen(true)
                 }}
                 onStartPreset={startPreset}
+                disabled={presetsLocked}
                 reducedMotion={reducedMotion}
               />
             ) : null}
@@ -2803,8 +3017,10 @@ function App() {
             {view === 'logs' && selectedLogIds.length > 0 ? (
               <SelectionPayBar
                 key="selection-pay"
-                count={selectedPayableCount}
+                payableCount={selectedPayableCount}
+                paidCount={selectedPaidCount}
                 onMarkSelectedPaid={markSelectedPaid}
+                onMarkSelectedUnpaid={markSelectedUnpaid}
               />
             ) : (
               <BottomNav key="bottom-nav" view={view} onChange={setView} />
@@ -2849,7 +3065,6 @@ function App() {
           settings={settings}
           onClose={() => setDetailLogId(null)}
           onSave={saveLogDetail}
-          onTogglePaid={togglePaid}
           onDelete={removeLog}
         />
       </div>

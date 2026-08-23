@@ -68,9 +68,10 @@ type WorktrackStore = {
   deletePreset: (id: string) => void
   updateSettings: (patch: Partial<UserSettings>) => UserSettings
   toggleLogSelection: (id: string) => void
+  selectLogs: (ids: string[]) => void
   clearSelection: () => void
   markLogsPaid: (ids: string[]) => LogEntry[]
-  toggleLogPaid: (id: string) => LogEntry | null
+  markLogsUnpaid: (ids: string[]) => LogEntry[]
 }
 
 function createId() {
@@ -291,6 +292,8 @@ export const useWorktrackStore = create<WorktrackStore>((set, get) => ({
         : [...state.selectedLogIds, id],
     })),
 
+  selectLogs: (ids) => set({ selectedLogIds: Array.from(new Set(ids)) }),
+
   clearSelection: () => set({ selectedLogIds: [] }),
 
   markLogsPaid: (ids) => {
@@ -317,25 +320,27 @@ export const useWorktrackStore = create<WorktrackStore>((set, get) => ({
     return updatedLogs
   },
 
-  toggleLogPaid: (id) => {
+  markLogsUnpaid: (ids) => {
     const timestamp = nowIso()
-    let updatedLog: LogEntry | null = null
+    const updatedLogs: LogEntry[] = []
 
     set((state) => ({
       logs: state.logs.map((log) => {
-        if (log.id !== id) {
+        if (!ids.includes(log.id) || !log.paidAt) {
           return log
         }
 
-        updatedLog = {
+        const updatedLog = {
           ...log,
-          paidAt: log.paidAt ? null : timestamp,
+          paidAt: null,
           updatedAt: timestamp,
         }
+        updatedLogs.push(updatedLog)
         return updatedLog
       }),
+      selectedLogIds: [],
     }))
 
-    return updatedLog
+    return updatedLogs
   },
 }))
