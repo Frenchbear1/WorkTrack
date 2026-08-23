@@ -65,7 +65,6 @@ export type UserSettings = {
   locationMode: LocationMode
   notesEnabled: boolean
   hidePaidByDefault: boolean
-  compactLogs: boolean
   homeSectionOrder: HomeSectionId[]
   homeSectionVisibility: Record<HomeSectionId, boolean>
 }

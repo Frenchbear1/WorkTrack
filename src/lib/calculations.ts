@@ -30,7 +30,6 @@ export const DEFAULT_SETTINGS: UserSettings = {
   locationMode: 'ask',
   notesEnabled: true,
   hidePaidByDefault: true,
-  compactLogs: false,
   homeSectionOrder: DEFAULT_HOME_SECTION_ORDER,
   homeSectionVisibility: DEFAULT_HOME_SECTION_VISIBILITY,
 }
@@ -143,6 +142,18 @@ export function calculateLiveLogEstimate(log: LogEntry, now = new Date()) {
   return roundDollar(rawAmount)
 }
 
+export function getHourlyMinutesForAmount(
+  amount: number,
+  rate: number,
+  adjustmentAmount = 0,
+) {
+  if (!Number.isFinite(rate) || rate <= 0) {
+    return null
+  }
+
+  return Math.max(0, ((amount - adjustmentAmount) / rate) * 60)
+}
+
 export function calculateUnpaidTotal(logs: LogEntry[]) {
   return logs
     .filter((log) => log.status === 'stopped' && !log.paidAt)
@@ -202,7 +213,6 @@ export function mergeSettings(settings: Partial<UserSettings> | null) {
     locationMode: merged.locationMode,
     notesEnabled: settings?.notesEnabled !== false,
     hidePaidByDefault: merged.hidePaidByDefault,
-    compactLogs: Boolean(merged.compactLogs),
     homeSectionOrder: normalizeHomeSectionOrder(merged.homeSectionOrder),
     homeSectionVisibility: normalizeHomeSectionVisibility(
       merged.homeSectionVisibility,

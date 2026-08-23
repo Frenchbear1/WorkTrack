@@ -6,6 +6,7 @@ import {
   calculateUnpaidTotal,
   DEFAULT_SETTINGS,
   getVisibleHomeSectionOrder,
+  getHourlyMinutesForAmount,
   mergeSettings,
   normalizeHomeSectionOrder,
   normalizeHomeSectionVisibility,
@@ -122,6 +123,12 @@ describe('billing calculations', () => {
     expect(getActiveLog([makeLog(), active])?.id).toBe('active')
   })
 
+  it('converts an edited hourly amount back into stored minutes', () => {
+    expect(getHourlyMinutesForAmount(100, 50)).toBe(120)
+    expect(getHourlyMinutesForAmount(110, 50, 10)).toBe(120)
+    expect(getHourlyMinutesForAmount(100, 0)).toBeNull()
+  })
+
   it('ships with useful defaults', () => {
     expect(DEFAULT_SETTINGS.currency).toBe('USD')
     expect(DEFAULT_SETTINGS.roundingMinutes).toBe(15)
@@ -131,7 +138,6 @@ describe('billing calculations', () => {
       'presets',
       'recent',
     ])
-    expect(DEFAULT_SETTINGS.compactLogs).toBe(false)
     expect(DEFAULT_SETTINGS.notesEnabled).toBe(true)
     expect(DEFAULT_SETTINGS.homeSectionVisibility.summary).toBe(true)
   })

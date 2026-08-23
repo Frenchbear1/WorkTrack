@@ -41,6 +41,10 @@ export function formatClockRange(startAt: string, endAt: string | null) {
   return `${startLabel} - ${format(end, 'h:mm a')}`
 }
 
+export function formatLoggedAt(value: string) {
+  return format(new Date(value), 'MMM d, h:mm a')
+}
+
 export function getWeekKey(value: string) {
   return format(startOfWeek(new Date(value), { weekStartsOn: 1 }), 'yyyy-MM-dd')
 }
